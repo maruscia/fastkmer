@@ -28,21 +28,26 @@ object SparkKmerCounter {
           println(min_s)
 
           if (i > min_s.pos) {
+
             //add superkmer
             out += ((min_s.value, cur.substring(super_kmer_start, i - 1 + k)))
             min_s = minimum_signature(s, m, i,bothStrands)
             super_kmer_start = i
           }
           else {
-            val last = s.takeRight(m)
-            if (is_valid(last) && last < min_s.value) {
+            val last = repr(s.takeRight(m),bothStrands)
 
+            if (last < min_s.value) {
+
+              //add superkmer
+              out += ((min_s.value, cur.substring(super_kmer_start, i - 1 + k)))
               min_s = Signature(last, i + k - m)
+              super_kmer_start = i
 
             }
           }
 
-        }
+      }
 
       out += ((min_s.value, cur.substring(super_kmer_start, cur.length)))
 
