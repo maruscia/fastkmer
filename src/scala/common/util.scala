@@ -5,25 +5,21 @@ package common
   */
 package object util {
 
-
-
+  val DEFAULT_SIGNATURE = "ZZZZ" //special signature to handle cases like
 
   case class Signature(value: String, pos: Int)
 
-  def repr(s: String, useCanonical:Boolean): String = {
-    if(useCanonical) {
-      val rev_comp = reverse_complement(s)
-      if (rev_comp < s)
-        rev_comp
-    }
-    s
-  }
 
-  def canonical_version(s: String): String = {
-    val rev_comp = reverse_complement(s)
-    if (s < rev_comp)
-      s
-    else rev_comp
+  def repr(s: String, canonical:Boolean): String = {
+    var r= s
+
+    if(canonical) {
+      val rev_comp = reverse_complement(s)
+      if (rev_comp < s) r = rev_comp
+    }
+
+    if(is_valid(r)) r else DEFAULT_SIGNATURE
+
   }
 
 

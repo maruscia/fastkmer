@@ -7,6 +7,7 @@ object Main {
     val N = 100   //args(2).toInt
     val M = 4     //args(3).toInt
     val BOTHSTRANDS = true  //args(4).toBoolean
+
   }
 
   def main(args: Array[String]): Unit = {

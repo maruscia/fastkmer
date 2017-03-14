@@ -35,7 +35,7 @@ object SparkKmerCounter {
           }
           else {
             val last = s.takeRight(m)
-            if (last < min_s.value) {
+            if (is_valid(last) && last < min_s.value) {
 
               min_s = Signature(last, i + k - m)
 
@@ -53,12 +53,10 @@ object SparkKmerCounter {
   }
 
   def minimum_signature(s: String, m: Int,s_starting_pos:Int,canonical: Boolean): Signature = {
-    val tuple = s.sliding(m,1).zipWithIndex.foldLeft(("Z",-1))((x,y) => {
-      val cy = (if(canonical) canonical_version(y._1) else y._1 , y._2)
-      if ((if(canonical) canonical_version(x._1) else x._1) < cy._1) x else cy
-    })
+    val tuple = s.sliding(m,1).zipWithIndex.map{ case (s,i) => (repr(s,canonical),i)}.min
     Signature(tuple._1,tuple._2 + s_starting_pos)
   }
+
 
   def executeJob(spark: SparkSession, input: String, output: String): Unit = {
 
@@ -66,29 +64,27 @@ object SparkKmerCounter {
     val conf = sc.hadoopConfiguration
     conf.set("k", Configuration.K.toString)
 
-    //I guess we should be able to set mapred.max(min).split.size to desired values
+    //I guess we should be able to set mapred.max(min).split.size to a desired value
     // then the split size is calculated with this formula: max(mapred.min.split.size, min(mapred.max.split.size, dfs.block.size))
-    // then we come to the partitions: spark creates a single partition for a single input split, so this is safe
+    // for what concerns partitions, spark creates a single partition for a single input split, so this is safe
 
     val FASTfile = input
     println(FASTfile)
     println(Configuration.K)
     println(Configuration.N)
-    val broadcastK = sc.broadcast(Configuration.K)//
+    val broadcastK = sc.broadcast(Configuration.K)
     val broadcastN = sc.broadcast(Configuration.N)
     val broadcastM = sc.broadcast(Configuration.M)
     val broadcastB = sc.broadcast(Configuration.BOTHSTRANDS)
 
+    //FASTQ: sc.newAPIHadoopFile(FASTQfile, classOf[FASTQInputFileFormat], classOf[NullWritable], classOf[QRecord]), conf)
 
-
-
-
-    val sequencesRDD = //sc.newAPIHadoopFile(FASTQfile, classOf[FASTQInputFileFormat], classOf[NullWritable], classOf[QRecord])//, conf)//
+    val sequencesRDD =
       sc.newAPIHadoopFile(FASTfile, classOf[FASTAlongInputFileFormat], classOf[NullWritable], classOf[PartialSequence], conf)
 
     val readPartitions = sequencesRDD.mapPartitions(getSuperKmers(broadcastK.value,broadcastM.value,broadcastB.value))
     // find frequencies of kmers
-    val kmersGrouped = readPartitions.sortByKey() //reduceByKey is more efficient because it reduces on each node before shuffling
+    val kmersGrouped = readPartitions.sortByKey()
 
     val partitions = kmersGrouped.mapPartitions(_.toList.sortBy(_._2).takeRight(broadcastN.value).toIterator)
 
