@@ -4,7 +4,7 @@ import org.apache.hadoop.io.NullWritable
 import org.apache.spark.sql.SparkSession
 import common.util._
 
-import scala.collection.mutable.ListBuffer
+import scala.collection.mutable.{ArrayBuffer, ListBuffer}
 
 
 object SparkKmerCounter {
@@ -19,19 +19,18 @@ object SparkKmerCounter {
       val cur:String = reads.next._2.getValue.replaceAll("\n","")
 
       //initialize vars
-      var min_s: Signature = minimum_signature(cur.substring(0,k),m,0,bothStrands)
+      var min_s: Signature = minimumSignature(cur.substring(0,k),m,0,bothStrands)
       var super_kmer_start = 0
 
       cur.sliding(k, 1).zipWithIndex.foreach {
 
         case (s, i) =>
-          println(min_s)
 
           if (i > min_s.pos) {
 
             //add superkmer
             out += ((min_s.value, cur.substring(super_kmer_start, i - 1 + k)))
-            min_s = minimum_signature(s, m, i,bothStrands)
+            min_s = minimumSignature(s, m, i,bothStrands)
             super_kmer_start = i
           }
           else {
@@ -57,8 +56,8 @@ object SparkKmerCounter {
     out.iterator
   }
 
-  def minimum_signature(s: String, m: Int,s_starting_pos:Int,canonical: Boolean): Signature = {
-    val tuple = s.sliding(m,1).zipWithIndex.map{ case (s,i) => (repr(s,canonical),i)}.min
+  def minimumSignature(s: String, m: Int, s_starting_pos:Int, canonical: Boolean): Signature = {
+    val tuple = s.sliding(m,1).zipWithIndex.map{ case (str,i) => (repr(str,canonical),i)}.min
     Signature(tuple._1,tuple._2 + s_starting_pos)
   }
 
@@ -87,13 +86,9 @@ object SparkKmerCounter {
     val sequencesRDD =
       sc.newAPIHadoopFile(FASTfile, classOf[FASTAlongInputFileFormat], classOf[NullWritable], classOf[PartialSequence], conf)
 
-    val readPartitions = sequencesRDD.mapPartitions(getSuperKmers(broadcastK.value,broadcastM.value,broadcastB.value))
-    // find frequencies of kmers
-    val kmersGrouped = readPartitions.sortByKey()
+    val readPartitions = sequencesRDD.mapPartitions(getSuperKmers(broadcastK.value,broadcastM.value,broadcastB.value)).aggregateByKey(new ArrayBuffer[String]())((buff:ArrayBuffer[String],s) => buff += s,(buf1,buf2) => buf1 ++= buf2)
 
-    val partitions = kmersGrouped.mapPartitions(_.toList.sortBy(_._2).takeRight(broadcastN.value).toIterator)
-
-    val allTopN = partitions.sortBy(_._2, ascending=false, 1).take(broadcastN.value)
+    val allTopN = readPartitions.take(broadcastN.value)
     //sc.parallelize(allTopN, 1).saveAsTextFile(output)
     // print out top-N kmers
     allTopN.foreach(println)

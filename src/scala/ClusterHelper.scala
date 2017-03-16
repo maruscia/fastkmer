@@ -3,11 +3,13 @@ import org.apache.spark.sql.SparkSession
 
 object Main {
   object Configuration{
-    val K = 20    //args(1).toInt
-    val N = 100   //args(2).toInt
-    val M = 4     //args(3).toInt
-    val BOTHSTRANDS = true  //args(4).toBoolean
+    val K = 20    //kmers length
+    val M = 4     //signature length
+    val BOTHSTRANDS = true  //if true, canonical version will be used
 
+    //debug
+    val X = 1   //as in (k,X)-mers, length of splitted super-kmers
+    val N = 10   //number of top results
   }
 
   def main(args: Array[String]): Unit = {
