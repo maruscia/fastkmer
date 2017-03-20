@@ -56,6 +56,14 @@ object SparkKmerCounter {
     out.iterator
   }
 
+
+  /*
+
+  TODO: next
+  def extractKmers(k: Int)(bin: Iterator[(String,ArrayBuffer[String])]) : Iterator[(String,Int)]
+
+  */
+
   def minimumSignature(s: String, m: Int, s_starting_pos:Int, canonical: Boolean): Signature = {
     val tuple = s.sliding(m,1).zipWithIndex.map{ case (str,i) => (repr(str,canonical),i)}.min
     Signature(tuple._1,tuple._2 + s_starting_pos)
@@ -88,6 +96,8 @@ object SparkKmerCounter {
 
     val readPartitions = sequencesRDD.mapPartitions(getSuperKmers(broadcastK.value,broadcastM.value,broadcastB.value)).aggregateByKey(new ArrayBuffer[String]())((buff:ArrayBuffer[String],s) => buff += s,(buf1,buf2) => buf1 ++= buf2)
 
+
+    //readPartitions.foreachPartition(_._2.sliding(broadcastK.value, 1).toIterator)
     val allTopN = readPartitions.take(broadcastN.value)
     //sc.parallelize(allTopN, 1).saveAsTextFile(output)
     // print out top-N kmers
