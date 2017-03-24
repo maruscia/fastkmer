@@ -1,21 +1,17 @@
-package scala.common
+package common
 import scala.reflect.ClassTag
 import common.util._
 /**
-  * Created by maru on 3/20/17.
+  * Created by Mara Sorella on 3/20/17.
   */
 package object sorting{
 
-
-
-  /*TODO: provide better sorting implementation, taking RS for granted now*/
+  /*TODO: provide better sorting implementation (MSD, possibly in place), taking RS for granted now*/
 
   object CountSort {
-    def apply[T : ClassTag](
-                             unsorted: Iterable[T],
-                             radix: Int,
-                             key: T => Int
-                           ): Iterable[T] = {
+    def apply[T : ClassTag](unsorted: Iterable[T],radix: Short,key: T => Short): Iterable[T] = {
+      if(unsorted.isEmpty)
+        return unsorted
       val sorted: Array[T] = Array.ofDim(unsorted.size)
       unsafeSortUsingAuxiliary(unsorted, radix, key, sorted)
       sorted.toIterable
@@ -23,11 +19,11 @@ package object sorting{
 
     def unsafeSortUsingAuxiliary[T : ClassTag](
                                                 unsorted: Iterable[T],
-                                                radix: Int,
-                                                key: T => Int,
+                                                radix: Short,
+                                                key: T => Short,
                                                 auxiliary: Array[T]
                                               ): Unit = {
-      require(unsorted.size > 0)
+
       require(radix > 0)
 
       // Count occurrences of each key
@@ -53,19 +49,12 @@ package object sorting{
       }
     }
 
-    def apply(unsorted: Iterable[Int], radix: Int): Iterable[Int] = {
-      apply(unsorted, radix, (identity[Int] _))
+
+
+    def apply(unsorted: Iterable[Short], radix: Short): Iterable[Short] = {
+      apply(unsorted, radix, (identity[Short] _))
     }
 
-    def apply(unsorted: Iterable[Int]): Iterable[Int] = {
-      val radix = unsorted.max + 1
-      apply(unsorted, radix, (identity[Int] _))
-    }
-
-    def apply[T : ClassTag](unsorted: Iterable[T], key: T => Int): Iterable[T] = {
-      val radix = key(unsorted.maxBy(key)) + 1
-      apply(unsorted, radix, key)
-    }
   }
 
   object RadixLSDSort {
@@ -75,17 +64,17 @@ package object sorting{
     def apply(
                unsorted: Iterable[String],
                stringLength: Int,
-               radix: Int = 256
-             ): Iterable[String] = {
+               radix: Short = 4
+             ): Array[String] = {
       val toSort = unsorted.toArray.clone
       unsafeSortInplace(toSort, stringLength, radix)
-      toSort.toIndexedSeq
+      toSort
     }
 
     def unsafeSortInplace(
                            toSort: Array[String],
                            stringLength: Int,
-                           radix: Int = 256
+                           radix: Short = 4
                          ): Unit = {
       val n = toSort.size
       val auxiliary = Array.ofDim[String](n)
@@ -93,7 +82,7 @@ package object sorting{
         CountSort.unsafeSortUsingAuxiliary(
           toSort,
           radix,
-          (s: String) => nucleotideToInt(s.charAt(d)),
+          (s: String) => nucleotideToShort(s.charAt(d)),
           auxiliary
         )
         auxiliary.copyToArray(toSort)

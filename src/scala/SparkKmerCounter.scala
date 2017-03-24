@@ -1,4 +1,5 @@
 import Main.Configuration
+import common.sorting.RadixLSDSort
 import fastdoop.{FASTAlongInputFileFormat, PartialSequence}
 import org.apache.hadoop.io.NullWritable
 import org.apache.spark.sql.SparkSession
@@ -34,7 +35,7 @@ object SparkKmerCounter {
             super_kmer_start = i
           }
           else {
-            val last = repr(s.takeRight(m),bothStrands)
+            val last = mMerRepr(s.takeRight(m),bothStrands)
 
             if (last < min_s.value) {
 
@@ -52,22 +53,115 @@ object SparkKmerCounter {
 
 
     }
-    // return Iterator[U]
     out.iterator
   }
 
 
-  /*
 
-  TODO: next
-  def extractKmers(k: Int)(bin: Iterator[(String,ArrayBuffer[String])]) : Iterator[(String,Int)]
 
-  */
+  def extractKXmers(k: Int, x: Int)(bin: Iterator[(String,ArrayBuffer[String])]) : Iterator[(String,Int)] = {
 
-  def minimumSignature(s: String, m: Int, s_starting_pos:Int, canonical: Boolean): Signature = {
-    val tuple = s.sliding(m,1).zipWithIndex.map{ case (str,i) => (repr(str,canonical),i)}.min
-    Signature(tuple._1,tuple._2 + s_starting_pos)
+    var superkmers = bin.flatMap(_._2)
+    // Array that will contain all (k,x)-mers (R)
+    var unsortedR = Array.fill[ArrayBuffer[String]]( x + 1)(new ArrayBuffer[String])
+
+    //output buffer
+    var out = ListBuffer.empty[(String,Int)]
+
+    var lastOrientation = -1
+    var orientation = -1
+    var runLength = 0
+    var runStart = 0
+    var sk:String = null
+
+    while(superkmers.hasNext){
+      sk = superkmers.next()
+
+      lastOrientation = -1
+      orientation = -1
+      runLength = 0
+
+      // the length of a run is 1 if i have a k-mer
+      // 2 if i have a k+1 mer
+      // 3 if i have a k+2 mer
+      // ...
+
+      for ((s, i) <- sk.sliding(k,1).zipWithIndex) {
+        orientation = getOrientation(s)
+
+        //check if we need to output
+        if (orientation == lastOrientation) {
+
+          runLength += 1
+
+          //if we have reached the biggest subsequence possible, must output it
+          if (runLength == x + 1) {
+            unsortedR(runLength -1).append(getCanonicalSubstring(sk,runStart, runStart  + k + runLength - 1,orientation))
+            runLength = 0
+            runStart = i
+            lastOrientation = -1
+          }
+        }
+
+        else{
+          //last orientation was different, must output previous sequence
+          if(lastOrientation != -1) {
+            unsortedR(runLength-1).append(getCanonicalSubstring(sk,runStart, runStart  + k + runLength - 1,lastOrientation))
+          }
+
+          //increase run length
+          runLength = 1
+          runStart = i
+          lastOrientation = orientation
+        }
+      }
+      if(runLength >0) {
+        unsortedR(runLength - 1).append(getCanonicalSubstring(sk,runStart, runStart  + k + runLength - 1,lastOrientation))
+      }
+    }
+
+    superkmers = null //hope GC will take care of this fixme: check why I can't call the GC explicitly (maybe configuring an aggressivity timeout)
+
+    //////// TODO sorting must be in place /////////
+    var sortedR = ArrayBuffer[Array[String]]()
+    unsortedR.foreach(println)
+    for (i <- unsortedR.indices)
+      sortedR += RadixLSDSort(unsortedR(i), k + i)
+    ////////////////////////////////////////////////
+
+    val heap = priorityQueueWithIndexes(sortedR.toArray,k)
+
+    require(heap.nonEmpty)
+    var index: RIndex = null
+    var last_kmer: String = null
+    var last_kmer_cnt = 0
+
+    var done = false
+    while (heap.nonEmpty){
+      index = heap.dequeue()
+      if (index.pointedKmer == last_kmer)
+        last_kmer_cnt += 1
+      else {
+
+        if(last_kmer != null) { //kmer has changed, send out previous one with completed count
+          out.append((last_kmer, last_kmer_cnt))
+
+        }
+        last_kmer = index.pointedKmer
+        last_kmer_cnt = 1
+      }
+      index.advance()
+
+      if(!index.exhausted) //if it still has kmers to read
+        heap.enqueue(index) //put it back in the heap
+    }
+    out.append((last_kmer, last_kmer_cnt))
+    out.toIterator
+
+
   }
+
+
 
 
   def executeJob(spark: SparkSession, input: String, output: String): Unit = {
@@ -81,11 +175,13 @@ object SparkKmerCounter {
     // for what concerns partitions, spark creates a single partition for a single input split, so this is safe
 
     val FASTfile = input
+    println(this.getClass.getSimpleName)
     println(FASTfile)
     println(Configuration.K)
     println(Configuration.N)
     val broadcastK = sc.broadcast(Configuration.K)
     val broadcastN = sc.broadcast(Configuration.N)
+    val broadcastX = sc.broadcast(Configuration.X)
     val broadcastM = sc.broadcast(Configuration.M)
     val broadcastB = sc.broadcast(Configuration.BOTHSTRANDS)
 
@@ -96,12 +192,13 @@ object SparkKmerCounter {
 
     val readPartitions = sequencesRDD.mapPartitions(getSuperKmers(broadcastK.value,broadcastM.value,broadcastB.value)).aggregateByKey(new ArrayBuffer[String]())((buff:ArrayBuffer[String],s) => buff += s,(buf1,buf2) => buf1 ++= buf2)
 
+    val sortedKmerCounts = readPartitions.mapPartitions(extractKXmers(broadcastK.value,broadcastX.value))//.mapPartitions(_.toList.sortBy(r => (r._2,r._1)).takeRight(broadcastN.value).toIterator)
 
-    //readPartitions.foreachPartition(_._2.sliding(broadcastK.value, 1).toIterator)
-    val allTopN = readPartitions.take(broadcastN.value)
-    //sc.parallelize(allTopN, 1).saveAsTextFile(output)
-    // print out top-N kmers
-    allTopN.foreach(println)
+    val all = sortedKmerCounts.sortBy(_._1)//(r => (r._2,r._1),false).take(broadcastN.value)
+
+    all.saveAsTextFile(output)
+
+    //all.foreach(println)
 
   }
 }

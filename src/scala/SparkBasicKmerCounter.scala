@@ -2,6 +2,7 @@ import Main.Configuration
 import fastdoop._
 import org.apache.hadoop.io.NullWritable
 import org.apache.spark.sql.SparkSession
+import common.util._
 import org.slf4j.LoggerFactory
 
 
@@ -21,6 +22,7 @@ object SparkBasicKmerCounter {
 
 
     val FASTfile = input
+    println(this.getClass.getSimpleName)
     println(FASTfile)
     println(Configuration.K)
     println(Configuration.N)
@@ -35,18 +37,17 @@ object SparkBasicKmerCounter {
     val sequencesRDD = //FASTQ: sc.newAPIHadoopFile(FASTQfile, classOf[FASTQInputFileFormat], classOf[NullWritable], classOf[QRecord])//, conf)//
       sc.newAPIHadoopFile(FASTfile, classOf[FASTAlongInputFileFormat], classOf[NullWritable], classOf[PartialSequence], conf)
 
-    val kmers = sequencesRDD.flatMap(_._2.getValue.sliding(broadcastK.value, 1).map((_, 1)))
+    val kmers = sequencesRDD.flatMap(_._2.getValue.replaceAll("\n","").sliding(broadcastK.value, 1).map(c => (repr(c,broadcastCanonical.value), 1)))
 
     // find frequencies of kmers
     val kmersGrouped = kmers.reduceByKey(_ + _) //reduceByKey is more efficient because it reduces on each node before shuffling
 
-    val partitions = kmersGrouped.mapPartitions(_.toList.sortBy(_._2).takeRight(broadcastN.value).toIterator)
+    val partitions = kmersGrouped.mapPartitions(_.toList.sortBy(_._1).toIterator)//(r => (r._2,r._1)).takeRight(broadcastN.value).toIterator)
 
-    val allTopN = partitions.sortBy(_._2, false, 1).take(broadcastN.value)
+    val all = partitions.sortBy(_._1)//(r => (r._2,r._1),false).take(broadcastN.value)
 
-    ///sc.parallelize(allTopN, 1).saveAsTextFile(output)
-    // print out top-N kmers
-    allTopN.foreach(println)
+    all.saveAsTextFile(output)
+    //all.foreach(println)
 
   }
 }
