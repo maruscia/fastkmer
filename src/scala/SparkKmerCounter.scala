@@ -12,54 +12,87 @@ object SparkKmerCounter {
   //val logger = Logger(LoggerFactory.getLogger("InputOutputFormatDriver"))
 
 
-  def getSuperKmers(k: Int, m: Int, bothStrands: Boolean)(reads: Iterator[(NullWritable,PartialSequence)]) : Iterator[(String,String)] = {
+  def getSuperKmers(k: Int, m: Int, B: Int,bothStrands: Boolean)(reads: Iterator[(NullWritable,PartialSequence)]) : Iterator[(Int,ArrayBuffer[String])] = {
+    def bin(s:String) = hash_to_bucket(s,B)
+    //var out = ListBuffer.empty[(String,String)]
+    var out = Array.tabulate[(Int,ArrayBuffer[String])](B)(i => (i,new ArrayBuffer[String]))
 
-    var out = ListBuffer.empty[(String,String)]
-    while (reads.hasNext)
-    {
-      val cur:String = reads.next._2.getValue.replaceAll("\n","")
+    while (reads.hasNext) {
+      val cur: String = reads.next._2.getValue.replaceAll("\n", "")
+      if (cur.length >= k) {
+        //initialize vars
+        var min_s: Signature = minimumSignature(cur.substring(0, k), m, 0, bothStrands)
+        var super_kmer_start = 0
+        var s: String = null
+        var N_pos = (-1, -1)
+        var i = 0
 
-      //initialize vars
-      var min_s: Signature = minimumSignature(cur.substring(0,k),m,0,bothStrands)
-      var super_kmer_start = 0
+        while (i < cur.length - k) {
 
-      cur.sliding(k, 1).zipWithIndex.foreach {
+          s = cur.substring(i, i + k)
 
-        case (s, i) =>
+          N_pos = firstAndLastOccurrenceOfInvalidNucleotide('N', s)
 
-          if (i > min_s.pos) {
+          if (N_pos._1 != -1) { //there's at least one 'N'
 
-            //add superkmer
-            out += ((min_s.value, cur.substring(super_kmer_start, i - 1 + k)))
-            min_s = minimumSignature(s, m, i,bothStrands)
-            super_kmer_start = i
+            if (super_kmer_start < i) {
+              // must output a superkmer
+              out(bin(min_s.value))._2 += cur.substring(super_kmer_start, i - 1 + k)
+            }
+            super_kmer_start = i + N_pos._2 + 1 //after last index of N
+            i += N_pos._2 + 1
           }
           else {
-            val last = mMerRepr(s.takeRight(m),bothStrands)
 
-            if (last < min_s.value) {
+            if (i > min_s.pos) {
 
               //add superkmer
-              out += ((min_s.value, cur.substring(super_kmer_start, i - 1 + k)))
-              min_s = Signature(last, i + k - m)
-              super_kmer_start = i
+              //out += ((min_s.value, cur.substring(super_kmer_start, i - 1 + k)))
+              if(super_kmer_start < i){
+                out(bin(min_s.value))._2 += cur.substring(super_kmer_start, i - 1 + k)
+
+                super_kmer_start = i
+              }
+              min_s = minimumSignature(s, m, i, bothStrands)
 
             }
+            else {
+              val last = mMerRepr(s.takeRight(m), bothStrands)
+
+              if (last < min_s.value) {
+
+                //add superkmer
+                //out += ((min_s.value, cur.substring(super_kmer_start, i - 1 + k)))
+                if(super_kmer_start < i) {
+                  out(bin(min_s.value))._2 += cur.substring(super_kmer_start, i - 1 + k)
+
+                  super_kmer_start = i
+                }
+                min_s = Signature(last, i + k - m)
+
+
+              }
+            }
+
+            i += 1
           }
+        }
+
+        //out += ((min_s.value, cur.substring(super_kmer_start, cur.length)))
+        if(cur.length - super_kmer_start >=k)
+          out(bin(min_s.value))._2 += cur.substring(super_kmer_start, cur.length)
 
       }
-
-      out += ((min_s.value, cur.substring(super_kmer_start, cur.length)))
-
-
     }
+
+    //out.view.filter({case (i,arr) => arr.nonEmpty}).iterator
     out.iterator
   }
 
 
 
 
-  def extractKXmers(k: Int, x: Int)(bin: Iterator[(String,ArrayBuffer[String])]) : Iterator[(String,Int)] = {
+  def extractKXmers(k: Int, x: Int)(bin: Iterator[(Int,ArrayBuffer[String])]) : Iterator[(String,Int)] = {
 
     var superkmers = bin.flatMap(_._2)
     // Array that will contain all (k,x)-mers (R)
@@ -72,21 +105,26 @@ object SparkKmerCounter {
     var orientation = -1
     var runLength = 0
     var runStart = 0
-    var sk:String = null
+    var i =0
+    var s: String = null
 
-    while(superkmers.hasNext){
-      sk = superkmers.next()
+    superkmers.foreach{
+      sk =>
 
       lastOrientation = -1
       orientation = -1
       runLength = 0
+
 
       // the length of a run is 1 if i have a k-mer
       // 2 if i have a k+1 mer
       // 3 if i have a k+2 mer
       // ...
 
-      for ((s, i) <- sk.sliding(k,1).zipWithIndex) {
+      for (i <- 0 to sk.length - k) {
+
+        s = sk.substring(i,i+k)
+
         orientation = getOrientation(s)
 
         //check if we need to output
@@ -183,14 +221,15 @@ object SparkKmerCounter {
     val broadcastN = sc.broadcast(Configuration.N)
     val broadcastX = sc.broadcast(Configuration.X)
     val broadcastM = sc.broadcast(Configuration.M)
-    val broadcastB = sc.broadcast(Configuration.BOTHSTRANDS)
+    val broadcastC = sc.broadcast(Configuration.BOTHSTRANDS)
+    val broadcastB = sc.broadcast(Configuration.B)
 
     //FASTQ: sc.newAPIHadoopFile(FASTQfile, classOf[FASTQInputFileFormat], classOf[NullWritable], classOf[QRecord]), conf)
 
     val sequencesRDD =
       sc.newAPIHadoopFile(FASTfile, classOf[FASTAlongInputFileFormat], classOf[NullWritable], classOf[PartialSequence], conf)
 
-    val readPartitions = sequencesRDD.mapPartitions(getSuperKmers(broadcastK.value,broadcastM.value,broadcastB.value)).aggregateByKey(new ArrayBuffer[String]())((buff:ArrayBuffer[String],s) => buff += s,(buf1,buf2) => buf1 ++= buf2)
+    val readPartitions = sequencesRDD.mapPartitions(getSuperKmers(broadcastK.value,broadcastM.value,broadcastB.value,broadcastC.value)).aggregateByKey(new ArrayBuffer[String]())((buf1,buf2) => buf1 ++= buf2,(buf1,buf2) => buf1 ++= buf2)
 
     val sortedKmerCounts = readPartitions.mapPartitions(extractKXmers(broadcastK.value,broadcastX.value))//.mapPartitions(_.toList.sortBy(r => (r._2,r._1)).takeRight(broadcastN.value).toIterator)
 

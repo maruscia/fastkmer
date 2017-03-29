@@ -3,7 +3,7 @@ package common
 
 import scala.collection.mutable
 import scala.collection.mutable.PriorityQueue
-import scala.reflect.ClassTag
+
 
 /**
   * Created by Mara Sorella on 2/21/17.
@@ -77,9 +77,8 @@ package object util {
       DEFAULT_SIGNATURE
   }
 
-
-  def nucleotide_complement(c: Char): Char = c match { case 'A' => 'T' case 'C' => 'G' case 'G' => 'C' case 'T' => 'A' case x => x}
-
+  def nucleotide_complement(c: Char): Char = c match { case 'A' => 'T' case 'C' => 'G' case 'G' => 'C' case 'T' => 'A' case x => throw new Exception("Not a nucleotide: " + x)}
+  def notANucleotide(c: Char): Boolean = !(c == 'A' || c == 'C' || c == 'G' || c == 'T')
 
   def reverse_complement(s: String): String = s.reverse.map { c => nucleotide_complement(c) }
 
@@ -93,12 +92,16 @@ package object util {
     case 'C' => 1
     case 'G' => 2
     case 'T' => 3
-    case _ => 4
+    case x => throw new Exception("Not a nucleotide: " + x)
   }
 
   def minimumSignature(s: String, m: Int, s_starting_pos:Int, canonical: Boolean): Signature = {
     val tuple = s.sliding(m,1).zipWithIndex.map{ case (str,i) => (repr(str,canonical),i)}.min
     Signature(tuple._1,tuple._2 + s_starting_pos)
+  }
+
+  def hash_to_bucket(s: String, B: Int): Int = {
+    s.hashCode % B
   }
 
   def getOrientation(kmer: String): Int = {
@@ -166,5 +169,20 @@ package object util {
   }
 
   val DEFAULT_SIGNATURE = "ZZZZ"
+
+
+  def firstAndLastOccurrenceOfInvalidNucleotide(c: Char,s:String): (Int,Int) = {
+    //finds first and last occurrence of c in s, (-1,-1) if not present
+    val r = s.foldLeft(-1,-1,0)({ case (f_l_a, ch) =>
+      if (notANucleotide(ch)) {
+        if (f_l_a._1 == -1)
+          (f_l_a._3, f_l_a._3, f_l_a._3 + 1)
+        else
+          (f_l_a._1, f_l_a._3, f_l_a._3 + 1)
+      }
+      else (f_l_a._1, f_l_a._2, f_l_a._3 + 1)
+    })
+    (r._1,r._2)
+  }
 }
 
