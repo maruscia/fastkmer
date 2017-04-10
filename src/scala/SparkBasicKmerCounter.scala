@@ -1,4 +1,3 @@
-import Main.Configuration
 import fastdoop._
 import org.apache.hadoop.io.NullWritable
 import org.apache.spark.sql.SparkSession
@@ -10,34 +9,33 @@ import org.slf4j.LoggerFactory
 object SparkBasicKmerCounter {
   //val logger = Logger(LoggerFactory.getLogger("InputOutputFormatDriver"))
 
-  def executeJob(spark: SparkSession, input: String, output: String): Unit = {
+  def executeJob(spark: SparkSession, configuration: TestConfiguration): Unit = {
 
     val sc = spark.sparkContext
     val conf = sc.hadoopConfiguration
-    conf.set("k", Configuration.K.toString)
+    conf.set("k", configuration.k.toString)
 
-    //I guess we should be able to set mapred.max(min).split.size to desired values
+    //I guess we should be able to set mapred.max(min).split.size to a desired value
     // then the split size is calculated with this formula: max(mapred.min.split.size, min(mapred.max.split.size, dfs.block.size))
-    // then we come to the partitions: spark creates a single partition for a single input split, so this is safe
+    // for what concerns partitions, spark creates a single partition for a single input split, so this is safe
 
+    val FASTfile = configuration.dataset
+    val output = configuration.outputDir
 
-    val FASTfile = input
     println(this.getClass.getSimpleName)
-    println(FASTfile)
-    println(Configuration.K)
-    println(Configuration.N)
-    val broadcastK = sc.broadcast(Configuration.K)//
+    println(configuration)
 
-    val broadcastM = sc.broadcast(Configuration.M)
-    val broadcastN = sc.broadcast(Configuration.N)
-    val broadcastCanonical = sc.broadcast(Configuration.BOTHSTRANDS)
-
+    val broadcastK = sc.broadcast(configuration.k)
+    val broadcastX = sc.broadcast(configuration.x)
+    val broadcastM = sc.broadcast(configuration.m)
+    val broadcastC = sc.broadcast(configuration.canonical)
+    val broadcastB = sc.broadcast(configuration.b)
 
 
     val sequencesRDD = //FASTQ: sc.newAPIHadoopFile(FASTQfile, classOf[FASTQInputFileFormat], classOf[NullWritable], classOf[QRecord])//, conf)//
       sc.newAPIHadoopFile(FASTfile, classOf[FASTAlongInputFileFormat], classOf[NullWritable], classOf[PartialSequence], conf)
 
-    val kmers = sequencesRDD.flatMap(_._2.getValue.replaceAll("\n","").sliding(broadcastK.value, 1).map(c => (repr(c,broadcastCanonical.value), 1)))
+    val kmers = sequencesRDD.flatMap(_._2.getValue.replaceAll("\n","").sliding(broadcastK.value, 1).map(c => (repr(c,broadcastC.value), 1)))
 
     // find frequencies of kmers
     val kmersGrouped = kmers.reduceByKey(_ + _) //reduceByKey is more efficient because it reduces on each node before shuffling

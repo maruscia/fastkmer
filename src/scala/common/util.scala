@@ -1,14 +1,43 @@
 package common
 
 
+import java.util.Date
+import java.util.concurrent.TimeUnit
+
+import org.apache.spark.util.SizeEstimator
+
 import scala.collection.mutable
 import scala.collection.mutable.PriorityQueue
+import scala.util.hashing.{MurmurHash3 => MH3}
 
 
 /**
   * Created by Mara Sorella on 2/21/17.
   */
 package object util {
+
+  /*
+  * TESTS
+  * */
+  case class TestConfiguration(dataset: String,k: Int, m: Int, x: Int, max_b: Int = 512,canonical:Boolean=true,prefix:String = ""){
+    val b:Int = Math.min(Math.pow(4,m),max_b).toInt
+    val outputDir:String = "hdfs://mycluster/tests/output/"+prefix+"k" + k + "_m" + m + "_x" + x + "_b" + b
+
+    override def toString: String = "Kmer counting on Spark. \nTest parameters:\nDataset: "+dataset + "\nk: "+ k + "\nm: " + m + "\nx: " + x + "\nb: " + b
+  }
+
+
+  /* DEBUG FUNCTIONS */
+  def getDateDiff(date1:Date, date2: Date, timeUnit:TimeUnit) = {
+    val diffInMillies = date2.getTime() - date1.getTime()
+    timeUnit.convert(diffInMillies,TimeUnit.MILLISECONDS)
+  }
+
+  def estimateSize(obj: AnyRef): String  ={
+    SizeEstimator.estimate(obj) / (1024 * 1024) + "MB"
+  }
+
+  /* END DEBUG */
 
 
 
@@ -74,18 +103,34 @@ package object util {
     if(is_valid(r))
       r
     else
-      DEFAULT_SIGNATURE
+      DEFAULT_SIGNATURE_STRING
   }
 
-  def nucleotide_complement(c: Char): Char = c match { case 'A' => 'T' case 'C' => 'G' case 'G' => 'C' case 'T' => 'A' case x => throw new Exception("Not a nucleotide: " + x)}
+  def nucleotide_complement(c: Char): Char = c match { case 'A' => 'T' case 'C' => 'G' case 'G' => 'C' case 'T' => 'A' case x => x}
+
   def notANucleotide(c: Char): Boolean = !(c == 'A' || c == 'C' || c == 'G' || c == 'T')
 
-  def reverse_complement(s: String): String = s.reverse.map { c => nucleotide_complement(c) }
+
+  def containsOnlyValidNucleotides(s: String): Boolean = {
+    for(c <- s){
+      if(notANucleotide(c)) return false
+    }
+    true
+  }
+
+  //def reverse_complement(s: String): String = s.reverse.map { c => nucleotide_complement(c) }
+
+  def reverse_complement(s: String): String = {
+    var sb = ""//new StringBuilder()
+    for (i <- s.length-1 to 0 by -1){
+      sb += (nucleotide_complement(s.charAt(i)))
+    }
+    sb//.toString
+  }
 
 
   ////"but only such that do not start with AAA, neither start with ACA, neither contain AA anywhere except at their beginning."
-  def is_valid(s: String): Boolean = !s.startsWith("AAA") && !s.startsWith("ACA") && s.indexOf("AA", 1) < 0
-
+  def is_valid(s: String): Boolean =  containsOnlyValidNucleotides(s) && !s.startsWith("AAA") && !s.startsWith("ACA") && s.indexOf("AA", 1) < 0
 
   def nucleotideToShort(n: Char): Short = n match {
     case 'A' => 0
@@ -95,13 +140,31 @@ package object util {
     case x => throw new Exception("Not a nucleotide: " + x)
   }
 
-  def minimumSignature(s: String, m: Int, s_starting_pos:Int, canonical: Boolean): Signature = {
-    val tuple = s.sliding(m,1).zipWithIndex.map{ case (str,i) => (repr(str,canonical),i)}.min
+  /*def minimumSignature(s: String, m: Int, s_starting_pos:Int, canonical: Boolean): Signature = {
+    val tuple = s.sliding(m,1).zipWithIndex.map{ case (str,i) => (mMerRepr(str,canonical),i)}.min
     Signature(tuple._1,tuple._2 + s_starting_pos)
+  }*/
+
+  def minimumSignature (s: String, m: Int, s_starting_pos:Int, canonical: Boolean): Signature = {
+    var min_s = DEFAULT_SIGNATURE_STRING
+    var min_pos = 0
+    var cur = ""
+
+    for (i <- 0 to s.length - m) {
+      cur = mMerRepr(s.substring(i,i+m),canonical)
+      if(cur < min_s){
+        min_s = cur
+        min_pos = i
+      }
+    }
+    Signature(min_s,s_starting_pos + min_pos)
   }
 
+
+
+
   def hash_to_bucket(s: String, B: Int): Int = {
-    s.hashCode % B
+    (MH3.stringHash(s, MH3.stringSeed) & 0xffffffffL % B).toInt //((s.hashCode & 0xFFFFFFFFL) % B).toInt
   }
 
   def getOrientation(kmer: String): Int = {
@@ -136,8 +199,6 @@ package object util {
 
       val a = arr(r_index)
 
-      a.foreach(println)
-      println()
       if (a.nonEmpty) {
         pos = 0
         starts = Array.fill[Int](r_index)(pos)
@@ -168,7 +229,7 @@ package object util {
     heap
   }
 
-  val DEFAULT_SIGNATURE = "ZZZZ"
+  val DEFAULT_SIGNATURE_STRING = "ZZZZ"
 
 
   def firstAndLastOccurrenceOfInvalidNucleotide(c: Char,s:String): (Int,Int) = {
