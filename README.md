@@ -33,13 +33,13 @@ It can also be downloaded directly from an HDInsight node.
 
  
 * [java](./src/java) | java libraries
-   * [multiseq](./src/java/multiseq) multisequence distance function specifications (_experimental_)
+    * [multiseq](./src/java/multiseq) multisequence distance function specifications (_experimental_)
 * [scala](./src/scala) 
-   * [skc](./src/scala/skc) | main project libraries
-       * [multisequence](./src/scala/skc/multisequence) | multisequence support (_experimental_)
-       * [test](./src/scala/skc/test) | runnable classes: `TestKmerCounter`, and `LocalTestKmerCounter`
-       * [package.scala](./src/scala/skc/package.scala)
-           * [util](./src/scala/skc/package.scala.util) | e.g., `Kmer`, `RIndex` classes and functions
+    * [skc](./src/scala/skc) | main project libraries
+        * [multisequence](./src/scala/skc/multisequence) | multisequence support (_experimental_)
+        * [test](./src/scala/skc/test) | runnable classes: `TestKmerCounter`, and `LocalTestKmerCounter`
+        * [package.scala](./src/scala/skc/package.scala)
+            * [util](./src/scala/skc/package.scala.util) | e.g., `Kmer`, `RIndex` classes and functions
 
 
 ## How to ##
@@ -57,9 +57,7 @@ mvn package
 
 **Running locally using spark local mode**
 
-
-
-`java -cp <CLASSPATH> skc.test.LocalTestKmerCounter` _k m x useHT B write sequenceType inputPath outputPath prefix enableKryo useCustomPartitioner numPartitionTasks_
+`java -cp <CLASSPATH, including scala-library.jar> skc.test.LocalTestKmerCounter` _k m x useHT B write sequenceType inputPath outputPath prefix enableKryo useCustomPartitioner numPartitionTasks_
 
 Parameter description (both for local and cluster mode):
 
@@ -70,11 +68,11 @@ Parameter description (both for local and cluster mode):
 |_x_| _(k,x)_ mers compression factor|
 |_useHT_ | 1 for HT based implementation, or 0|
 |_B_| number of bins|
-|_write_| enable output|
 |_sequenceType_| 0 for short sequences, 1 for long|
 |_inputPath_| dataset input path (HDFS or local)|
 |_outputPath_| counts output path (HDFS or local)|
 |_prefix_|custom output directory prefix|
+|_write_| enable output|
 |_enableKryo_| 1 to enable Kryo compression, or 0|
 |_useCustomPartitioner_| 1 for partition balancing, or 0|
 |_numPartitionTasks_| if partitioning, specifies number of partitions|
@@ -82,9 +80,11 @@ Parameter description (both for local and cluster mode):
 
 **Running in cluster mode (YARN) using spark-submit (example)**
 
-```
-spark-submit --master yarn --deploy-mode cluster  --num-executors \<executors\> --executor-cores \<cores\> --driver-memory 1g --executor-memory \<Xg\> --jars fastutil-7.2.1.jar --class skc.test.TestKmerCounter SKC-1.0-SNAPSHOT.jar  28 10 3 2048 0 0 hdfs://mycluster/tests/input/ggallus.fasta /mycluster/tests/output/ gallus 1 0 0 0
+Example for dataset ggallus.fasta located on HDFS at hdfs://mycluster/tests/input/ggallus.fasta
 
 ```
+spark-submit --master yarn --deploy-mode cluster  --num-executors <executors> --executor-cores <cores> --driver-memory 1g --executor-memory <Xg> --jars /path/to/fastutil-7.2.1.jar /path/to/FASTdoop-1.0.jar --class skc.test.TestKmerCounter SKC-1.0-SNAPSHOT.jar  28 10 3 2048 0 0 hdfs://mycluster/tests/input/ggallus.fasta /mycluster/tests/output/ gallus 1 0 0 0
 
+```
 
+remember to put all the external jars on the node where spark-submit is invoked (`/path/to/<jar>.jar`), so that they can be deployed on all worker nodes by Spark.
