@@ -13,15 +13,17 @@ It is mainly coded in Scala, yet it entails and supports libraries written in ja
 
 
 ### Installing Fastdoop in local maven repository ###
-Run the following command:
+FASTdoop is not yet available on maven repositories. To import the relevant jar into your local maven repository, run the following command:
 ```
 mvn install:install-file -Dfile=/path/to/FASTdoop-1.0.jar -DgroupId=org.fastdoop -DartifactId=fastdoop -Dversion=1.0 -Dpackaging=jar
 ```
 
 
 ### IntelliJ Azure plugin ###
+This project is ready to be run on top of a Microsoft Azure HDInsight cluster.
+Optionally, the cluster job can be submitted, run, and debugged directly from your machine using IntelliJ IDEA or Eclipse.
 
-Instructions on how to configure the IntelliJ Azure plugin to interoperate with HDinsight:
+Instructions on how to configure the IntelliJ Azure plugin to interoperate with HDinsight can be found at:
 https://docs.microsoft.com/en-us/azure/hdinsight/hdinsight-apache-spark-intellij-tool-plugin
 
 Make sure to use the HDInsight spark-assembly-2.0.0-hadoop2.7.0-SNAPSHOT.jar which is *not*
@@ -83,7 +85,7 @@ Parameter description (both for local and cluster mode):
 Example for dataset ggallus.fasta located on HDFS at hdfs://mycluster/tests/input/ggallus.fasta
 
 ```
-spark-submit --master yarn --deploy-mode cluster  --num-executors <executors> --executor-cores <cores> --driver-memory 1g --executor-memory <Xg> --jars /path/to/fastutil-7.2.1.jar /path/to/FASTdoop-1.0.jar --class skc.test.TestKmerCounter SKC-1.0-SNAPSHOT.jar  28 10 3 2048 0 0 hdfs://mycluster/tests/input/ggallus.fasta /mycluster/tests/output/ gallus 1 0 0 0
+spark-submit --master yarn --deploy-mode cluster  --num-executors <executors> --executor-cores <cores> --driver-memory 1g --executor-memory <Xg> --jars /path/to/fastutil-7.2.1.jar,/path/to/FASTdoop-1.0.jar --class skc.test.TestKmerCounter SKC-1.0-SNAPSHOT.jar  28 10 3 2048 0 0 hdfs://mycluster/tests/input/ggallus.fasta /mycluster/tests/output/ gallus 1 0 0 0
 
 ```
 
