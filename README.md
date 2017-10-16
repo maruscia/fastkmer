@@ -57,7 +57,7 @@ mvn package
 
 **Running locally using spark local mode**
 
-`java -cp <CLASSPATH, including scala-library.jar> skc.test.LocalTestKmerCounter` _k m x useHT B write sequenceType inputPath outputPath prefix enableKryo useCustomPartitioner numPartitionTasks_
+`java -cp <CLASSPATH, including scala-library.jar> skc.test.LocalTestKmerCounter` _k m x useHT B sequenceType inputPath outputPath prefix write enableKryo useCustomPartitioner numPartitionTasks_
 
 Parameter description (both for local and cluster mode):
 
