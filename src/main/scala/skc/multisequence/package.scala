@@ -7,7 +7,7 @@ import multiseq.{DistanceMeasure, SquaredEuclidean}
   */
 package object multisequtil {
 
-  object ConfigParameters {
+  /*object ConfigParameters {
     val KValue = "-k"
     val MValue = "-m"
     val XValue = "-x"
@@ -20,7 +20,7 @@ package object multisequtil {
     val UseShortSequences ="-short"
     val UseLongSequences = "-long"
 
-  }
+  }*/
 
   case class MultisequenceTestConfiguration(dataset: String,outputDirectory:String,k: Int, m: Int, x: Int, max_b: Int = 2000,
                                sequenceType:Int=0,canonical:Boolean=true,debug:Boolean=false,write:Boolean=true,useCustomPartitioner:Boolean=false,numPartitionTasks:Int=0,var distanceMeasure:DistanceMeasure = new SquaredEuclidean()){

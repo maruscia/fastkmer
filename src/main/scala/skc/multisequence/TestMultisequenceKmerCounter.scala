@@ -3,9 +3,7 @@ package skc.multisequence
 import multiseq.SquaredEuclidean
 import multisequtil._
 import org.apache.spark.sql.SparkSession
-import org.apache.spark.{SparkConf, SparkContext}
-import skc.SparkBinKmerCounter
-import sun.reflect.generics.reflectiveObjects.NotImplementedException
+
 
 
 object TestMultisequenceKmerCounter {
@@ -13,23 +11,40 @@ object TestMultisequenceKmerCounter {
 
   def main(args: Array[String]): Unit = {
 
-    //parse command line arguments
-    //val datasetFolder = "hdfs://mycluster/tests/input/"//"hdfs://mycluster/tests/input/"
 
     //defaults if unspecified
     var k = 20
     var m:Int = 4
     var x = 3
-    var b = 2000
+    var b = 2048
+
     var inputDatasetPath =  ""
     var outputDatasetPath = ""
-    var sequenceType = -1
+    var prefix = ""
+
+    var sequenceType = 0
     var useHT = false
     var write = false
     var useCustomPartitioner = false
     var numPartitionTasks = 0
+    var useKryo = false
 
-    val it = args.iterator
+    k = args(0).toInt
+    m = args(1).toInt
+    x = args(2).toInt
+    b = args(3).toInt
+    useHT =  if(args(4).toInt == 1) true else false
+    sequenceType = args(5).toInt
+    inputDatasetPath = args(6)
+    outputDatasetPath = args(7)
+    prefix = args(8)
+    write = if(args(9).toInt == 1) true else false
+    useKryo = if(args(10).toInt == 1) true else false
+    useCustomPartitioner = if(args(11).toInt == 1) true else false
+    if(useCustomPartitioner)
+      numPartitionTasks = args(12).toInt
+
+    /*val it = args.iterator
     while(it.hasNext) {
       val flagOrParam = it.next()
 
@@ -69,7 +84,7 @@ object TestMultisequenceKmerCounter {
 
     if(sequenceType == -1)
       throw new NotImplementedError("Must specify sequence type.")
-
+*/
 
     //Default distance measure: SquaredEuclidean
 
@@ -83,8 +98,6 @@ object TestMultisequenceKmerCounter {
   def run(configuration: MultisequenceTestConfiguration) {
     val spark = SparkSession
       .builder
-      //.config("spark.sql.warehouse.dir", "hdfs:///spark-warehouse")
-      //.config("spark.jars", "wasbs:///datasets@grupporisorse13742.blob.core.windows.net/jars/fastutil-7.2.1.jar")
       .appName("SKC Test: k" + configuration.k + " m:" + configuration.m)
       .getOrCreate()
 
