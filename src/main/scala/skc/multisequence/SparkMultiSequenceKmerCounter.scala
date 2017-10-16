@@ -72,18 +72,8 @@ object SparkMultiSequenceKmerCounter {
 
         while (i < cur.length - k + 1) {
 
-          //println(i)
-          //println("pos:" +min_s.pos)
 
-          //if(i % 250000 == 0) {
-          //  t1 = System.nanoTime()/1000000
-          //  println("[ " + "Elapsed: " + (t1-t0) +"ms ] i = " + i)
-          //  t0 = t1
-          //  total += t0
-          //}
-
-
-          N_pos = firstAndLastOccurrenceOfInvalidNucleotide('N',cur,i,i + k) //DEBUG: not much influence
+          N_pos = firstAndLastOccurrenceOfInvalidNucleotide('N',cur,i,i + k)
 
 
           if (N_pos._1 != -1) {
@@ -95,8 +85,6 @@ object SparkMultiSequenceKmerCounter {
 
 
               out(bin(min_s.value))._2 += new Kmer(i - 1 + k - super_kmer_start,cur,super_kmer_start)
-
-              //println("[out1] "+longToString(min_s.value) + " - " + new Kmer(i - 1 + k - super_kmer_start,cur,super_kmer_start))
 
 
             }
@@ -111,13 +99,11 @@ object SparkMultiSequenceKmerCounter {
               if (super_kmer_start < i) {
                 out(bin(min_s.value))._2 += new Kmer(i - 1 + k - super_kmer_start,cur,super_kmer_start)
 
-                //println("[out2] "+longToString(min_s.value) + " - " + new Kmer(i - 1 + k - super_kmer_start,cur,super_kmer_start))
-
                 super_kmer_start = i
 
 
               }
-              //println("setting signature:")
+
               min_s.set(s.getSignature(m,norm),i)
 
 
@@ -126,7 +112,7 @@ object SparkMultiSequenceKmerCounter {
             else {
 
               val last:Int = s.lastM(lastMmask,norm,m)
-              //println("checking last: "+longToString(last))
+
               if (last < min_s.value) {
 
                 //add superkmer
@@ -134,7 +120,6 @@ object SparkMultiSequenceKmerCounter {
 
                   out(bin(min_s.value))._2 += new Kmer(i - 1 + k - super_kmer_start,cur,super_kmer_start)
 
-                  //println("[out3] "+longToString(min_s.value) + " - " + new Kmer(i - 1 + k - super_kmer_start,cur,super_kmer_start))
 
                   super_kmer_start = i
 
@@ -155,16 +140,16 @@ object SparkMultiSequenceKmerCounter {
 
 
           N_pos = firstAndLastOccurrenceOfInvalidNucleotide('N',cur,i,cur.length)
-          //println("npos final: "+N_pos + " + last_kmer_start: "+super_kmer_start)
+
           if(N_pos._1 == -1){
             out(bin(min_s.value))._2 += new Kmer(cur.length - super_kmer_start, cur, super_kmer_start)
-            //println("[out4] " + longToString(min_s.value) + " - " + new Kmer(cur.length - super_kmer_start, cur, super_kmer_start))
+
           }
           else if(i + N_pos._1 >= super_kmer_start+k){
 
             out(bin(min_s.value))._2 += new Kmer(i + N_pos._1, cur, super_kmer_start)
 
-            //println("[out5] " + longToString(min_s.value) + " - " + new Kmer(N_pos._1, cur, super_kmer_start))
+
           }
         }
 
@@ -173,13 +158,6 @@ object SparkMultiSequenceKmerCounter {
     }
 
     val end = new Date(System.currentTimeMillis())
-
-
-    //filter empty bins, return iterator
-    //out.iterator.foreach(println)
-
-
-
 
     println("Finished getSuperKmers. Total time: "+ getDateDiff(start,end,TimeUnit.SECONDS) +"s")
 
@@ -229,15 +207,6 @@ object SparkMultiSequenceKmerCounter {
           var bin_no = -1
           while (i < cur.length - k + 1) {
 
-            //println(i)
-            //println("pos:" +min_s.pos)
-
-            //if(i % 250000 == 0) {
-            //  t1 = System.nanoTime()/1000000
-            //  println("[ " + "Elapsed: " + (t1-t0) +"ms ] i = " + i)
-            //  t0 = t1
-            //  total += t0
-            //}
 
 
             N_pos = firstAndLastOccurrenceOfInvalidNucleotide('N',cur,i,i + k) //DEBUG: not much influence
@@ -248,9 +217,6 @@ object SparkMultiSequenceKmerCounter {
 
               if (super_kmer_start < i) {
                 // must output a superkmer
-
-
-
 
                 binSizes(bin(min_s.value)) += i - super_kmer_start
 
@@ -267,36 +233,31 @@ object SparkMultiSequenceKmerCounter {
                 if (super_kmer_start < i) {
 
                   binSizes(bin(min_s.value))+= i - super_kmer_start
-                  //println("[out2] "+longToString(min_s.value) + " - " + new Kmer(i - 1 + k - super_kmer_start,cur,super_kmer_start))
 
                   super_kmer_start = i
 
 
                 }
-                //println("setting signature:")
-                min_s.set(s.getSignature(m,norm),i)
 
+                min_s.set(s.getSignature(m,norm),i)
 
 
               }
               else {
 
                 val last:Int = s.lastM(lastMmask,norm,m)
-                //println("checking last: "+longToString(last))
+
                 if (last < min_s.value) {
 
                   //add superkmer
                   if (super_kmer_start < i) {
                     binSizes(bin(min_s.value))+= i - super_kmer_start
-                    //println("[out3] "+longToString(min_s.value) + " - " + new Kmer(i - 1 + k - super_kmer_start,cur,super_kmer_start))
 
                     super_kmer_start = i
-
 
                   }
 
                   min_s.set((last,i + k - m))
-
 
                 }
               }
@@ -309,15 +270,14 @@ object SparkMultiSequenceKmerCounter {
 
 
             N_pos = firstAndLastOccurrenceOfInvalidNucleotide('N',cur,i,cur.length)
-            //println("npos final: "+N_pos + " + last_kmer_start: "+super_kmer_start)
+
             if(N_pos._1 == -1){
               binSizes(bin(min_s.value))+=cur.length - super_kmer_start -k +1
 
-              //println("[out4] " + longToString(min_s.value) + " - " + new Kmer(cur.length - super_kmer_start, cur, super_kmer_start))
             }
             else if(i + N_pos._1 >= super_kmer_start+k){
               binSizes(bin(min_s.value))+= i + N_pos._1 - k + 1
-              //println("[out5] " + longToString(min_s.value) + " - " + new Kmer(N_pos._1, cur, super_kmer_start))
+
             }
           }
 
@@ -347,7 +307,7 @@ object SparkMultiSequenceKmerCounter {
 
       // Array that will contain all (k,x)-mers (R)
       val unsortedR: Array[ArrayBuffer[Kmer]] = Array.fill[ArrayBuffer[Kmer]](x + 1)(new ArrayBuffer[Kmer])
-      var sortedR: Array[Array[Kmer]] = null
+      var sortedR = Array.fill[Array[Kmer]](x + 1)(new Array[Kmer](0))
 
       var sequenceBin: Iterator[Kmer] = null
 
@@ -457,8 +417,10 @@ object SparkMultiSequenceKmerCounter {
         println("built unsorted array [Elapsed: " + getDateDiff(binStart,new Date(System.currentTimeMillis()),TimeUnit.SECONDS) +"s")
 
 
-
-        sortedR = unsortedR.view.map(_.toArray).force
+        for (i <- unsortedR.indices) {
+          sortedR(i) = unsortedR(i).toArray
+          unsortedR(i).clear()
+        }
 
         //println(">> Size of sortedR Array is :" +estimateSize(sortedR))
         println(">> Sorting started (Array of " + nElementsToSort + " total elements.")
@@ -466,7 +428,7 @@ object SparkMultiSequenceKmerCounter {
         val befSorting = new Date(System.currentTimeMillis())
 
         for (i <- sortedR.indices){
-          scala.util.Sorting.stableSort(sortedR(i))
+          scala.util.Sorting.quickSort(sortedR(i))
         }
 
         println(">> Sorting finished -, Elapsed: " + getDateDiff(befSorting,new Date(System.currentTimeMillis()),TimeUnit.SECONDS) +"s")
@@ -487,8 +449,6 @@ object SparkMultiSequenceKmerCounter {
           println(">>> Started outputting k-mer counts")
 
           //initialize sequence similarities
-
-
           if(sequenceSimilarities.isEmpty)
             for(s1 <- sequenceNames.indices)
               for (s2  <- s1+1 to sequenceNames.length)
@@ -543,7 +503,7 @@ object SparkMultiSequenceKmerCounter {
             if (!index.exhausted) {
               //if it still has kmers to read
               heap.enqueue(index) //put it back in the heap
-              //println("enqueuing: "+index.pointedKmer)
+
             }
 
 
@@ -570,8 +530,9 @@ object SparkMultiSequenceKmerCounter {
         println(">>> Finished outputting -  Elapsed: "+getDateDiff(befHeap,new Date(System.currentTimeMillis()),TimeUnit.SECONDS) +"s")
 
 
-        for (el <- unsortedR)
-          el.clear()
+        for (i <- sortedR.indices) {
+          sortedR(i) = null
+        }
 
 
         println("End processing bin. Total elapsed time: "+ getDateDiff(binStart,new Date(System.currentTimeMillis()),TimeUnit.SECONDS) +"s")
