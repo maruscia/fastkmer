@@ -44,6 +44,7 @@ It can also be downloaded directly from an HDInsight node.
             * [util](./src/scala/skc/package.scala.util) | e.g., `Kmer`, `RIndex` classes and functions
 
 
+
 ## How to ##
 
 **Compile**
@@ -90,3 +91,35 @@ spark-submit --master yarn --deploy-mode cluster  --num-executors <executors> --
 ```
 
 remember to put all the external jars on the node where spark-submit is invoked (`/path/to/<jar>.jar`), so that they can be deployed on all worker nodes by Spark.
+
+
+### Handling multiple sequences (experimental, under development) ###
+
+The package multisequence contains a prototypical implementation of multiple sequence distance computation based on exact k-mers.
+The main runnable class is `TestMultisequenceKmerCounter`, and assumes as _inputPath_ a file containing reads from a set of sequences to be compared.
+Each sequence is assumed to be pre-tagged by a read descriptor, as highlighted in the following example:
+
+**sequences.fasta**
+<pre>
+<span style="color:blue;">SRR197985</span>.1 HWUSI-EAS687_61DAJ:3:1:1046:16470 length=200
+AAGCAGGGGGTTGGTGCTGGCANGCAGTCTCAGGGCGTTTNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNN
+NNNNNNNNNNNNAAACATTAATGTTAAAATGACACAAATCCTTACCCGGTTNGCTATCTTTTCCNNNNNNNNANNNNTGNNGNTNGCNNNAATGCCNTTG
+<span style="color:green;">SRR956987</span>.1 HWI-ST571:185:D111MACXX:2:1101:1213:2216 length=101
+TGGACTCTTCTGCTTGGCACGGGACTGTTGATTCAATCGGGTCTTCGCTCCTTTTTTAGTCCACCTTTTC
+GGCTTATGCCTATGNNNTNGTTTCGAAAGCT
+<span style="color:green;">SRR956987</span>.2 HWI-ST571:185:D111MACXX:2:1101:1213:2216 length=101
+GTNNNNGACGAATGNNNCNNTCTTATGCNTNTTNGGANNNNCGACGGANTATTTNNNNCTTTTTTCTCNN
+CGNCCGAAACCACTTTGACTGAGATTGNNNG
+<span style="color:blue;">SRR197985</span>.2 HWUSI-EAS687_61DAJ:3:1:1046:1308 length=200
+GGCACCATGGACTGCACGGACCCATGTGNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNN
+NNNNNNNNNNNNGTGGGGTGTCCCACAAGGGTCCGTGCAGTCCAGGGTACCNCAGGTAGGGTCTCNNNNNNNTNNNCTGCCCCATCTGCNTCCCAGNACA
+<span style="color:green;">SRR956987</span>.3 HWI-ST571:185:D111MACXX:2:1101:1019:2221 length=101
+NGTGGTTCCGGAGAATCCAGCTACAGGAGAACCAGGAACGGAGAGCTCTCCCCCTTTTTCCGCCCGACTC
+TTTGGTCTTAAGAATNCTGGTTTTAAGAACN
+...
+</pre>
+
+Under `java/multiseq` package can be found many distance implementations. By default this prototype assumes Squared euclidean distance which can be computed autonomously and incrementally for each bin.
+
+
+Currently, only partial distances are calculated inside bins but not yet aggregated and saved to disk.
