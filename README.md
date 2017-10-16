@@ -100,6 +100,7 @@ The main runnable class is `TestMultisequenceKmerCounter`, and assumes as _input
 Each sequence is assumed to be pre-tagged by a read descriptor, as highlighted in the following example:
 
 **sequences.fasta**
+
 <pre>
 <span style="color:blue;">SRR197985</span>.1 HWUSI-EAS687_61DAJ:3:1:1046:16470 length=200
 AAGCAGGGGGTTGGTGCTGGCANGCAGTCTCAGGGCGTTTNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNN
