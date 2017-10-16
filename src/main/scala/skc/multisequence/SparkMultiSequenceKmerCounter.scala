@@ -297,7 +297,6 @@ object SparkMultiSequenceKmerCounter {
     }
 
 
-//TODO TRANSFORM IN MAPPARTITIONS
     def extractKXmersAndComputePartialDistances(k: Int, x: Int, path: String, write:Boolean=true, distanceMeasure: DistanceMeasure)(bins: Iterator[(Int, ArrayBuffer[(String,ArrayBuffer[Kmer])])]): Iterator[(SequencePair,Double)] = {
       //debug: start datetime
 
@@ -553,10 +552,6 @@ object SparkMultiSequenceKmerCounter {
       val conf = sc.hadoopConfiguration
       conf.set("k", configuration.k.toString)
 
-      //I guess we should be able to set mapred.max(min).split.size to a desired value
-      // then the split size is calculated with this formula: max(mapred.min.split.size, min(mapred.max.split.size, dfs.block.size))
-      // for what concerns partitions, spark creates a single partition for a single input split, so this is safe
-
       val FASTfile = configuration.dataset
 
 
@@ -581,9 +576,7 @@ object SparkMultiSequenceKmerCounter {
       var sortedbinSizeEstimate:Array[(Int,Int)] = null
       var partitioner:MultiprocessorSchedulingPartitioner = null
 
-      //println("collected: "+ sortedbinSizeEstimate.mkString(", "))
 
-      //readPartitions.foreachPartition(evaluatePartitionBalance(broadcastPath.value))
       if(configuration.useCustomPartitioner){
         sortedbinSizeEstimate = sequencesRDD.sample(withReplacement=false,fraction=0.01).mapPartitions(getBinsEstimateSizes(broadcastK.value, broadcastM.value, broadcastB.value, broadcastC.value)).reduceByKey(_+_).sortBy(_._2, ascending = false).collect()
         partitioner = new MultiprocessorSchedulingPartitioner(configuration.numPartitionTasks,sortedbinSizeEstimate)
