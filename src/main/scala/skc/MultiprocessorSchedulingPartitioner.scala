@@ -2,6 +2,8 @@ package skc
 
 import org.apache.spark.Partitioner
 
+import scala.util.Random
+
 
 /**
   * Created by Mara Sorella on 6/7/17.
@@ -40,6 +42,7 @@ object MultiprocessorSchedulingPartitioner{
     //create a set of job_bins with capacity equal to max(max_bin_size,sum_sizes/no_partitions)
     val bins: Array[Int] = Array.fill[Int](partitions)(0)//Math.max(items.map(_._2).max,Math.ceil(items.map(_._2).sum.toDouble/partitions)).toInt)
     //println("bins sizes: " + bins.deep.mkString(" "))
+    val partitionIndexPermutation = new scala.util.Random(31337).shuffle[Int, IndexedSeq](0 until partitions)
 
     for (item <- items) {
 
@@ -49,7 +52,7 @@ object MultiprocessorSchedulingPartitioner{
       //else {
         scheduleOn(bin, item)
 
-        map += (item._1 -> bin)
+        map += (item._1 -> partitionIndexPermutation(bin))
         //println(item._1 +" -> "+ +bin + " -> " +item._2)
       //}
     }
