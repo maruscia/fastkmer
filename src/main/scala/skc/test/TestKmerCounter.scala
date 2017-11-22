@@ -57,7 +57,7 @@ object TestKmerCounter {
 
 
     var conf = new SparkConf()
-      .setAppName("SKC Test: k" + configuration.k + " m:" + configuration.m)
+      .setAppName("SKC Test: k" + configuration.k + " m" + configuration.m + " B" + configuration.b +" write" +configuration.write + " HT" + configuration.useHT + " usePart" + configuration.useCustomPartitioner +" partTasks" + configuration.numPartitionTasks)
 
       if(configuration.useKryoSerializer)
         conf = conf
