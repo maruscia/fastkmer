@@ -1,4 +1,4 @@
-package multiseq;
+package distances;
 import java.util.Map;
 
 public class Parameters {

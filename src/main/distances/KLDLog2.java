@@ -1,6 +1,6 @@
-package multiseq;
+package distances;
 
-public class KLDLogN implements DistanceMeasure  {
+public class KLDLog2 implements DistanceMeasure  {
 
 	@Override
 	public boolean hasInternalProduct() {
@@ -11,19 +11,18 @@ public class KLDLogN implements DistanceMeasure  {
 	public double DKL(double p, double q) {
 		double dis = 0.0;
 		if (p != 0 && q!=0)
-		     dis= p*(Math.log(p / q));
+              dis= p*(Math.log(p / q) / Math.log(2));
 		return dis;
 	}
 	
 	@Override
 	public double computePartialDistance(Parameters param) {
-		
+	
 		double c1 = param.getC1();
 		double c2 = param.getC2();
 		
-		double dkl1 = DKL(c1, c2);
-		
-		return dkl1;
+		return DKL(c1, c2);
+	
 	}
 
 	@Override
@@ -48,13 +47,14 @@ public class KLDLogN implements DistanceMeasure  {
 
 	@Override
 	public String getName() {
-			return "KLDLogN";
+			return "KLDLog2";
 	}
 	
-	public boolean isCompatibile(String pattern){
-	
+	public  boolean isCompatibile(String pattern){
+		
 			return true;
 		
 	}
+
 
 }

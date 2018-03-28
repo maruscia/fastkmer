@@ -1,4 +1,4 @@
-package skc
+package fastkmer
 
 import org.apache.spark.Partitioner
 
@@ -36,7 +36,6 @@ object MultiprocessorSchedulingPartitioner{
     //println("Called Solve")
     //println("items: " + items.mkString(" "))
     //println("Total no of bins seen in sampling: "+items.length)
-
 
     val map = new collection.mutable.HashMap[Int, Int]()
     //create a set of job_bins with capacity equal to max(max_bin_size,sum_sizes/no_partitions)

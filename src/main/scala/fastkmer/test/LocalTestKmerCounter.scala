@@ -1,11 +1,10 @@
-package skc.test
+package fastkmer.test
 
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.{SparkConf, SparkContext}
-import skc.SparkBinKmerCounter
-import skc.multisequence.SparkMultiSequenceKmerCounter
-import skc.util.Kmer
-import testutil._
+import fastkmer.SparkBinKmerCounter
+import fastkmer.test.testutil.TestConfiguration
+import fastkmer.util.Kmer
 
 import scala.collection.mutable.ArrayBuffer
 
@@ -20,7 +19,7 @@ object LocalTestKmerCounter {
     //defaults if unspecified
     var k = 20
     var m:Int = 4
-    var x = 3
+    var x = 3 //DEPRECATED, was 2nd-phase compression
     var b = 2000
     var inputDatasetPath =  ""
     var outputDatasetPath = ""
@@ -34,7 +33,7 @@ object LocalTestKmerCounter {
 
     k = args(0).toInt
     m = args(1).toInt
-    x = args(2).toInt
+    x = args(2).toInt //DEPRECATED, was 2nd-phase compression
     b = args(3).toInt
     useHT =  if(args(4).toInt == 1) true else false
     sequenceType = args(5).toInt

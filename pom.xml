@@ -6,7 +6,7 @@
 
     <groupId>org.dss</groupId>
     <artifactId>SKC</artifactId>
-    <version>1.0-SNAPSHOT</version>
+    <version>1.0-NOBINS-SNAPSHOT</version>
 
 
     <prerequisites>
@@ -31,8 +31,6 @@
 
         <spark.version>2.1.0</spark.version>
         <spark-hadoop.version>2.8.0</spark-hadoop.version>
-
-
 
 
     </properties>
@@ -89,8 +87,10 @@
                 </configuration>
                 <executions>
                     <execution>
-                        <id>default-compile</id>
-                        <phase>none</phase>
+                        <phase>compile</phase>
+                        <goals>
+                            <goal>compile</goal>
+                        </goals>
                     </execution>
                 </executions>
             </plugin>
@@ -103,9 +103,11 @@
                 </configuration>
                 <executions>
                     <execution>
+                        <id>scala-compile-first</id>
+                        <phase>process-resources</phase>
                         <goals>
+                            <goal>add-source</goal>
                             <goal>compile</goal>
-
                         </goals>
                     </execution>
                 </executions>

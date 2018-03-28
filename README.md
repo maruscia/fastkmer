@@ -69,8 +69,8 @@ Parameter description (both for local and cluster mode):
 |_k_ | kmers length|
 |_m_ | signature length|
 |_x_| _(k,x)_ mers compression factor|
-|_useHT_ | 1 for HT based implementation, or 0|
 |_B_| number of bins|
+|_useHT_ | 1 for HT based implementation, or 0|
 |_sequenceType_| 0 for short sequences, 1 for long|
 |_inputPath_| dataset input path (HDFS or local)|
 |_outputPath_| counts output path (HDFS or local)|

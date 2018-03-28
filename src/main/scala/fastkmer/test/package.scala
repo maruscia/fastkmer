@@ -1,10 +1,10 @@
-package skc.test
+package fastkmer.test
 /**
   * Created by Mara Sorella on 6/14/17.
   */
 
 import org.apache.spark.serializer.KryoRegistrator
-import skc.util.Kmer
+
 
 package object testutil {
 

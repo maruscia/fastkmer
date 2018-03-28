@@ -1,8 +1,14 @@
-package skc.multisequence
+package fastkmer.multisequence
 
-import multiseq.SquaredEuclidean
-import multisequtil._
+import distances.SquaredEuclidean
+import fastkmer.SparkBinKmerCounter
+import fastkmer.multisequence.multisequtil.MultisequenceTestConfiguration
+import fastkmer.test.testutil.TestConfiguration
+import fastkmer.util.Kmer
+import org.apache.spark.SparkConf
 import org.apache.spark.sql.SparkSession
+
+import scala.collection.mutable.ArrayBuffer
 
 
 
@@ -32,17 +38,16 @@ object TestMultisequenceKmerCounter {
     k = args(0).toInt
     m = args(1).toInt
     x = args(2).toInt
-    b = args(3).toInt
-    useHT =  if(args(4).toInt == 1) true else false
-    sequenceType = args(5).toInt
-    inputDatasetPath = args(6)
-    outputDatasetPath = args(7)
-    prefix = args(8)
-    write = if(args(9).toInt == 1) true else false
-    useKryo = if(args(10).toInt == 1) true else false
-    useCustomPartitioner = if(args(11).toInt == 1) true else false
+    useHT =  if(args(3).toInt == 1) true else false
+    sequenceType = args(4).toInt
+    inputDatasetPath = args(5)
+    outputDatasetPath = args(6)
+    prefix = args(7)
+    write = if(args(8).toInt == 1) true else false
+    useKryo = if(args(9).toInt == 1) true else false
+    useCustomPartitioner = if(args(10).toInt == 1) true else false
     if(useCustomPartitioner)
-      numPartitionTasks = args(12).toInt
+      numPartitionTasks = args(11).toInt
 
     /*val it = args.iterator
     while(it.hasNext) {
@@ -88,21 +93,25 @@ object TestMultisequenceKmerCounter {
 
     //Default distance measure: SquaredEuclidean
 
-    val tc = MultisequenceTestConfiguration(inputDatasetPath,outputDatasetPath,k,m,x,max_b=b,sequenceType=sequenceType,write=write,useCustomPartitioner=useCustomPartitioner,numPartitionTasks=numPartitionTasks)
+    val tc = MultisequenceTestConfiguration(inputDatasetPath,outputDatasetPath,k,m,sequenceType=sequenceType,write=write,useCustomPartitioner=useCustomPartitioner,numPartitionTasks=numPartitionTasks)
     run(tc)
 
   }
 
 
-
   def run(configuration: MultisequenceTestConfiguration) {
+
+    var conf = new SparkConf()
+      .setAppName("SKC Test: k" + configuration.k + " m:" + configuration.m)
+      .setMaster("local[4]")
+
+
     val spark = SparkSession
       .builder
-      .appName("SKC Test: k" + configuration.k + " m:" + configuration.m)
+      .config(conf)
       .getOrCreate()
 
     SparkMultiSequenceKmerCounter.executeJob(spark, configuration)
-
 
   }
 

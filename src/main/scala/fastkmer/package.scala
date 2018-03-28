@@ -2,7 +2,7 @@
   * Created by Mara Sorella on 4/25/17.
   */
 
-package skc
+package fastkmer
 import java.util.Date
 import java.util.concurrent.TimeUnit
 
@@ -123,7 +123,20 @@ package object util {
       res
     }
 
+  class SuperkmerHashMap[A, B](size : Int) extends mutable.HashMap[A, B] {
+    override def initialSize: Int = size
 
+
+
+  }
+
+
+  case class Bin(bin:ArrayBuffer[Kmer], var size:Int){
+    def addKmer(k:Kmer): Unit ={
+      bin.append(k)
+      size = size+ 1
+    }
+  }
 
 
     case class Signature(var value: Int, var pos: Int,offset:Int=0) {

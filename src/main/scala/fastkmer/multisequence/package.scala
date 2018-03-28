@@ -1,6 +1,6 @@
-package skc.multisequence
+package fastkmer.multisequence
 
-import multiseq.{DistanceMeasure, SquaredEuclidean}
+import distances._
 
 /**
   * Created by Mara Sorella on 6/26/17.
@@ -22,12 +22,12 @@ package object multisequtil {
 
   }*/
 
-  case class MultisequenceTestConfiguration(dataset: String,outputDirectory:String,k: Int, m: Int, x: Int, max_b: Int = 2000,
+  case class MultisequenceTestConfiguration(dataset: String,outputDirectory:String,k: Int, m: Int,
                                sequenceType:Int=0,canonical:Boolean=true,debug:Boolean=false,write:Boolean=true,useCustomPartitioner:Boolean=false,numPartitionTasks:Int=0,var distanceMeasure:DistanceMeasure = new SquaredEuclidean()){
 
-    val b:Int = Math.min(Math.pow(4,m),max_b).toInt
-    val outputDir: String  = outputDirectory + "k" + k + "_m" + m + "_x" + x + "_b" + b+"_s"+sequenceType
-    var  testDesc = "Multisequence Kmer counting on Spark. \nTest parameters:\nDataset: "+dataset + "\nk: "+ k + "\nm: " + m + "\nx: " + x + "\nb: " + b +"\nSequence type: "+sequenceType +"\nWriting: "+write+"\nBin Packing Partitioning: "+useCustomPartitioner
+
+    val outputDir: String  = outputDirectory + "k" + k + "_m" + m  +"_s"+sequenceType
+    var  testDesc = "Multisequence Kmer counting on Spark. \nTest parameters:\nDataset: "+dataset + "\nk: "+ k + "\nm: " + m  +"\nSequence type: "+sequenceType +"\nWriting: "+write+"\nBin Packing Partitioning: "+useCustomPartitioner
     if(useCustomPartitioner)
       testDesc+= "\t no. partition tasks: "+numPartitionTasks
 
@@ -43,8 +43,5 @@ package object multisequtil {
     }
 
   }
-
-
-
 
 }

@@ -6,7 +6,8 @@
  * 
  * Date: January, 26 2015
  */
-package multiseq;
+package distances;
+
 public interface DistanceMeasure{
 
 	/**

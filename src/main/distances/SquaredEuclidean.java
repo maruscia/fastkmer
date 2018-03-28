@@ -1,4 +1,6 @@
-package multiseq;
+package distances;
+
+import java.io.Serializable;
 
 /**
  * 
@@ -8,7 +10,7 @@ package multiseq;
  * 
  * Date: January, 30 2015
  */
-public class SquaredEuclidean implements DistanceMeasure {
+public class SquaredEuclidean implements DistanceMeasure, Serializable {
 	
 
 	public SquaredEuclidean() {

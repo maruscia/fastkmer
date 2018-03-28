@@ -1,40 +1,39 @@
-package skc.multisequence
+package fastkmer.multisequence
 
 /**
   * Created by Mara Sorella on 6/14/17.
   */
-
 
 import java.io.{BufferedWriter, OutputStreamWriter}
 import java.net.URI
 import java.util.Date
 import java.util.concurrent.TimeUnit
 
+import com.esotericsoftware.kryo.Kryo
+import com.esotericsoftware.kryo.io.Output
 import fastdoop.{FASTAlongInputFileFormat, FASTAshortInputFileFormat, PartialSequence, Record}
-import multiseq.DistanceMeasure
-import multiseq.Parameters
+import distances._
+import fastkmer.MultiprocessorSchedulingPartitioner
+import fastkmer.multisequence.multisequtil.{MultisequenceTestConfiguration, SequencePair}
+import fastkmer.util._
+import it.unimi.dsi.fastutil.objects.Object2IntOpenHashMap
 import org.apache.hadoop.conf.Configuration
-import org.apache.hadoop.fs.{FileSystem, Path}
+import org.apache.hadoop.fs.{FSDataOutputStream, FileSystem, Path}
 import org.apache.hadoop.io.NullWritable
-import org.apache.spark.SparkContext
+import org.apache.spark.{SparkContext, TaskContext}
 import org.apache.spark.sql.SparkSession
-import skc.MultiprocessorSchedulingPartitioner
-import skc.multisequence.multisequtil._
-import skc.util._
 
 import scala.collection.mutable
 import scala.collection.mutable.ArrayBuffer
 object SparkMultiSequenceKmerCounter {
 
-  def getSuperKmers(k: Int, m: Int, B: Int, bothStrands: Boolean)(reads: Iterator[(NullWritable, _)]): Iterator[(Int, (String,ArrayBuffer[Kmer]))] = {
+  def getSuperKmers(k: Int, m: Int, bothStrands: Boolean)(reads: Iterator[(NullWritable, _)]):  Iterator[(Int, (String,ArrayBuffer[Kmer]))] = {
     //debug: start datetime
     val start = new Date(System.currentTimeMillis())
     var t0 = System.nanoTime()/1000000
 
-    def bin(s: Int) = hash_to_bucket(s, B)
     var nreads = 0
-
-    var out = Array.tabulate[(Int, ArrayBuffer[Kmer])](B)(i => (i, new ArrayBuffer[Kmer]))
+    var out = new SuperkmerHashMap[Int,ArrayBuffer[Kmer]](Math.pow(3,m).toInt + 1)
 
     var t1 = t0
     var total:Long = 0
@@ -50,6 +49,7 @@ object SparkMultiSequenceKmerCounter {
     var s: Kmer = null
     var N_pos = (-1, -1)
     var i = 0
+    var new_kmer:Kmer = null
 
     //sequence name
     var sequence: String = null
@@ -77,15 +77,17 @@ object SparkMultiSequenceKmerCounter {
 
 
           if (N_pos._1 != -1) {
-            //there's at least one 'N'
+
 
             if (super_kmer_start < i) {
               // must output a superkmer
-
-
-
-              out(bin(min_s.value))._2 += new Kmer(i - 1 + k - super_kmer_start,cur,super_kmer_start)
-
+              new_kmer = new Kmer(i - 1 + k - super_kmer_start,cur,super_kmer_start)
+              if(out.contains(min_s.value)){
+                out(min_s.value).append(new_kmer)
+              }
+              else{
+                out(min_s.value)= ArrayBuffer[Kmer](new_kmer)
+              }
 
             }
             super_kmer_start = i + N_pos._2 + 1 //after last index of N
@@ -97,7 +99,13 @@ object SparkMultiSequenceKmerCounter {
 
             if (i > min_s.pos) {
               if (super_kmer_start < i) {
-                out(bin(min_s.value))._2 += new Kmer(i - 1 + k - super_kmer_start,cur,super_kmer_start)
+                new_kmer=new Kmer(i - 1 + k - super_kmer_start,cur,super_kmer_start)
+                if(out.contains(min_s.value)){
+                  out(min_s.value).append(new_kmer)
+                }
+                else{
+                  out(min_s.value)= ArrayBuffer[Kmer](new_kmer)
+                }
 
                 super_kmer_start = i
 
@@ -105,8 +113,6 @@ object SparkMultiSequenceKmerCounter {
               }
 
               min_s.set(s.getSignature(m,norm),i)
-
-
 
             }
             else {
@@ -117,9 +123,13 @@ object SparkMultiSequenceKmerCounter {
 
                 //add superkmer
                 if (super_kmer_start < i) {
-
-                  out(bin(min_s.value))._2 += new Kmer(i - 1 + k - super_kmer_start,cur,super_kmer_start)
-
+                  new_kmer = new Kmer(i - 1 + k - super_kmer_start,cur,super_kmer_start)
+                  if(out.contains(min_s.value)){
+                    out(min_s.value).append(new_kmer)
+                  }
+                  else{
+                    out(min_s.value)= ArrayBuffer[Kmer](new_kmer)
+                  }
 
                   super_kmer_start = i
 
@@ -142,13 +152,24 @@ object SparkMultiSequenceKmerCounter {
           N_pos = firstAndLastOccurrenceOfInvalidNucleotide('N',cur,i,cur.length)
 
           if(N_pos._1 == -1){
-            out(bin(min_s.value))._2 += new Kmer(cur.length - super_kmer_start, cur, super_kmer_start)
+            new_kmer=new Kmer(cur.length - super_kmer_start, cur, super_kmer_start)
+
+            if(out.contains(min_s.value)){
+              out(min_s.value).append(new_kmer)
+            }
+            else{
+              out(min_s.value)= ArrayBuffer[Kmer](new_kmer)
+            }
 
           }
           else if(i + N_pos._1 >= super_kmer_start+k){
-
-            out(bin(min_s.value))._2 += new Kmer(i + N_pos._1, cur, super_kmer_start)
-
+            new_kmer=new Kmer(i + N_pos._1, cur, super_kmer_start)
+            if(out.contains(min_s.value)){
+              out(min_s.value).append(new_kmer)
+            }
+            else{
+              out(min_s.value)= ArrayBuffer[Kmer](new_kmer)
+            }
 
           }
         }
@@ -159,15 +180,13 @@ object SparkMultiSequenceKmerCounter {
 
     val end = new Date(System.currentTimeMillis())
 
-    println("Finished getSuperKmers. Total time: "+ getDateDiff(start,end,TimeUnit.SECONDS) +"s")
+    println("Finished getSuperKmersSignatures. Total time: "+ getDateDiff(start,end,TimeUnit.SECONDS) +"s")
 
-    out.view.filter({case (_,arr) => arr.nonEmpty}).map{ case (x,y)=> (x,(sequence,y))}.iterator
+    out.view.map{ case (x,y)=> (x,(sequence,y))}.iterator
   }
 
 
-
-
-    def getBinsEstimateSizes(k: Int, m: Int, B: Int, bothStrands: Boolean)(reads: Iterator[(NullWritable, _)]): Iterator[(Int, Int)] = {
+  def getBinsEstimateSizes(k: Int, m: Int, B: Int, bothStrands: Boolean)(reads: Iterator[(NullWritable, _)]): Iterator[(Int, Int)] = {
       //debug: start datetime
       val start = new Date(System.currentTimeMillis())
       var t0 = System.nanoTime()/1000000
@@ -296,7 +315,7 @@ object SparkMultiSequenceKmerCounter {
       binSizes.zipWithIndex.filter(_._1 >0).map(_.swap).toIterator
     }
 
-
+/*deprecated: for previous FastKmer implementation
     def extractKXmersAndComputePartialDistances(k: Int, x: Int, path: String, write:Boolean=true, distanceMeasure: DistanceMeasure)(bins: Iterator[(Int, ArrayBuffer[(String,ArrayBuffer[Kmer])])]): Iterator[(SequencePair,Double)] = {
       //debug: start datetime
 
@@ -545,6 +564,153 @@ object SparkMultiSequenceKmerCounter {
 
       sequenceSimilarities.toIterator
     }
+*/
+  //Second phase kmer writing implementation (ignore the fields outputPartition (for use with custom partitioner) and Kryo (custom serializer)
+  def extractKXmersHTAndComputePartialDistances(k: Int, path: String,write:Boolean=true,useKryo:Boolean=false,outputPartition:Boolean=false,distanceMeasure: DistanceMeasure)(bins: Iterator[(Int, ArrayBuffer[(String,ArrayBuffer[Kmer])])]): Iterator[(SequencePair,Double)] = {
+
+    val start = new Date(System.currentTimeMillis())
+    println("[" + start + "] Started extractKXmersHTAndComputePartialDistances() with path " + path + "writing: " + write)
+
+    var nBins: Int = 0
+    var binNumber = -1
+
+    var sequenceBin: Iterator[Kmer] = null
+    var kmersUpperBoundForBin: Int = 0
+
+    var sk: Kmer = null
+    var orientation = 0
+    val r = Runtime.getRuntime
+
+    var map: Object2IntOpenHashMap[Kmer] = null
+
+
+    var kmer: Kmer = null
+
+
+    //output
+    var outputPath: String = null
+    var outputStream: FSDataOutputStream = null
+    var writer: BufferedWriter = null
+    var output: Output = null
+    var kryo: Kryo = null
+
+    //Sequences related variables
+    val sequenceSimilarities = new mutable.HashMap[SequencePair, Double]() //holding partial similarity values for each pair of seqs
+
+    var sequenceNames = Seq[String]() // holding the
+
+
+    if (write && outputPartition) {
+      print("Processing partition: " + TaskContext.getPartitionId())
+      outputPath = path + "/partition" + TaskContext.getPartitionId()
+      outputStream = FileSystem.get(URI.create(outputPath), new Configuration()).create(new Path(outputPath))
+      writer = new BufferedWriter(new OutputStreamWriter(outputStream))
+      output = new Output(FileSystem.get(URI.create(outputPath), new Configuration()).create(new Path(outputPath)))
+      kryo = new Kryo()
+    }
+
+    while (bins.hasNext) {
+      // for each bin
+
+      val binStart = new Date(System.currentTimeMillis())
+      val sequencesInBin = bins.next() //Int, ArrayBuffer[(String,ArrayBuffer[Kmer])]
+
+      binNumber = sequencesInBin._1
+      println("\n[" + nBins + "] Examining bin: " + binNumber)
+
+
+      for ((sequenceName, sequenceArr) <- sequencesInBin._2) {
+        val seqId: Short = if (!sequenceNames.contains(sequenceName)) {
+          sequenceNames = sequenceNames :+ sequenceName
+
+          (sequenceNames.length - 1).toShort
+        }
+        else sequenceNames.indexOf(sequenceName).toShort
+
+
+        sequenceBin = sequenceArr.toIterator
+
+        while (sequenceBin.hasNext) {
+          //for each super-kmer
+
+          sk = sequenceBin.next
+
+          for (i <- 0 to sk.length - k) {
+
+            orientation = getOrientation(sk, i, i + k - 1)
+            kmer = new Kmer(k, sk, i, i + k - 1, orientation)
+
+            map.addTo(kmer, 1)
+
+            //Here you should use a map-like datastructure that takes into account separately, the counts for each sequence
+            //e.g.,:
+            //Key: Kmer   Value Seq[(seq1,count1),(seq2,count2),...)]
+
+
+          }
+        }
+
+      }
+
+      //Initialize sequence similarities: depending on how you handle sequences, you might use something similar
+      if (sequenceSimilarities.isEmpty)
+        for (s1 <- sequenceNames.indices)
+          for (s2 <- s1 + 1 to sequenceNames.length)
+            sequenceSimilarities.put(SequencePair()(sequenceNames(s1), sequenceNames(s2)), distanceMeasure.initDistance())
+
+      if (map.size() > 0) {
+
+
+        if (!outputPartition && write) {
+          outputPath = path + "/bin" + binNumber
+          if (useKryo) {
+            kryo = new Kryo()
+            output = new Output(FileSystem.get(URI.create(outputPath), new Configuration()).create(new Path(outputPath)))
+          }
+          else
+            writer = new BufferedWriter(new OutputStreamWriter(FileSystem.get(URI.create(outputPath), new Configuration()).create(new Path(outputPath))))
+        }
+
+        val it = map.object2IntEntrySet().fastIterator()
+
+        while (it.hasNext) {
+          val km = it.next()
+
+          // 1. Here you should update the sequence similarities with this kmer
+          for (s1 <- sequenceNames.indices)
+            for (s2 <- s1 + 1 to sequenceNames.length) {
+              val pair = SequencePair()(sequenceNames(s1), sequenceNames(s2))
+              sequenceSimilarities.put(pair, distanceMeasure.distanceOperator(
+                sequenceSimilarities.get(pair).asInstanceOf[Double],
+                distanceMeasure.computePartialDistance(new Parameters(//counts(sequence1),counts(sequence2) <- you should get them from your map
+                )))
+              )
+
+            }
+
+          if (write)
+            if (useKryo) kryo.writeObject(output, km.getKey + "\t" + "\t" + km.getIntValue + '\n')
+            else writer.write(km.getKey + "\t" + km.getIntValue + '\n')
+        }
+
+        if (write && !outputPartition) {
+          if (useKryo) output.close()
+          else writer.close()
+        }
+      }
+
+
+    }
+
+    if(outputPartition && write){
+      if(useKryo) output.close()
+      else writer.close()
+    }
+
+    //you should probably output to next phase for aggregation
+    sequenceSimilarities.iterator
+  }
+
 
   @throws(classOf[UnsupportedOperationException]) def executeJob(spark: SparkSession, configuration: MultisequenceTestConfiguration): Unit = {
 
@@ -554,15 +720,14 @@ object SparkMultiSequenceKmerCounter {
 
       val FASTfile = configuration.dataset
 
-
       println(this.getClass.getSimpleName)
       println(configuration)
 
       val broadcastK = sc.broadcast(configuration.k)
-      val broadcastX = sc.broadcast(configuration.x)
+      //val broadcastX = sc.broadcast(configuration.x)
       val broadcastM = sc.broadcast(configuration.m)
       val broadcastC = sc.broadcast(configuration.canonical)
-      val broadcastB = sc.broadcast(configuration.b)
+
       val broadcastPath = sc.broadcast(configuration.outputDir)
 
       //FASTQ: sc.newAPIHadoopFile(FASTQfile, classOf[FASTQInputFileFormat], classOf[NullWritable], classOf[QRecord]), conf)
@@ -572,65 +737,10 @@ object SparkMultiSequenceKmerCounter {
           sc.newAPIHadoopFile(FASTfile, classOf[FASTAshortInputFileFormat], classOf[NullWritable], classOf[fastdoop.Record], conf)
         else sc.newAPIHadoopFile(FASTfile, classOf[FASTAlongInputFileFormat], classOf[NullWritable], classOf[PartialSequence], conf)
 
-
-      var sortedbinSizeEstimate:Array[(Int,Int)] = null
-      var partitioner:MultiprocessorSchedulingPartitioner = null
-
-
-      if(configuration.useCustomPartitioner){
-        sortedbinSizeEstimate = sequencesRDD.sample(withReplacement=false,fraction=0.01).mapPartitions(getBinsEstimateSizes(broadcastK.value, broadcastM.value, broadcastB.value, broadcastC.value)).reduceByKey(_+_).sortBy(_._2, ascending = false).collect()
-        partitioner = new MultiprocessorSchedulingPartitioner(configuration.numPartitionTasks,sortedbinSizeEstimate)
-      }
-
-        val superKmers = sequencesRDD.mapPartitions(getSuperKmers(broadcastK.value, broadcastM.value, broadcastB.value, broadcastC.value))
-        if(configuration.useCustomPartitioner)
-          superKmers.aggregateByKey(new ArrayBuffer[(String,ArrayBuffer[Kmer])],partitioner)((accum,el)=> accum += el,_ ++ _).mapPartitions(extractKXmersAndComputePartialDistances(broadcastK.value, broadcastX.value, broadcastPath.value,write = configuration.write,distanceMeasure = configuration.distanceMeasure)) //mapPartitions(extractKXmers(broadcastK.value, broadcastX.value)) //.mapPartitions(_.toList.sortBy(r => (r._2,r._1)).takeRight(broadcastN.value).toIterator)
-        else superKmers.aggregateByKey(new ArrayBuffer[(String,ArrayBuffer[Kmer])])((accum,el)=> accum += el,_ ++ _).mapPartitions(extractKXmersAndComputePartialDistances(broadcastK.value, broadcastX.value, broadcastPath.value,write = configuration.write,distanceMeasure = configuration.distanceMeasure))
-
-
-    }
-  @throws(classOf[UnsupportedOperationException]) def executeJob(spark: SparkContext, configuration: MultisequenceTestConfiguration): Unit = {
-
-      val sc = spark
-      val conf = sc.hadoopConfiguration
-      conf.set("k", configuration.k.toString)
-
-      val FASTfile = configuration.dataset
-
-
-      println(this.getClass.getSimpleName)
-      println(configuration)
-
-      val broadcastK = sc.broadcast(configuration.k)
-      val broadcastX = sc.broadcast(configuration.x)
-      val broadcastM = sc.broadcast(configuration.m)
-      val broadcastC = sc.broadcast(configuration.canonical)
-      val broadcastB = sc.broadcast(configuration.b)
-      val broadcastPath = sc.broadcast(configuration.outputDir)
-
-
-      //FASTQ: sc.newAPIHadoopFile(FASTQfile, classOf[FASTQInputFileFormat], classOf[NullWritable], classOf[QRecord]), conf)
-
-      val sequencesRDD =
-        if (configuration.sequenceType == 0)
-          sc.newAPIHadoopFile(FASTfile, classOf[FASTAshortInputFileFormat], classOf[NullWritable], classOf[fastdoop.Record], conf)
-        else sc.newAPIHadoopFile(FASTfile, classOf[FASTAlongInputFileFormat], classOf[NullWritable], classOf[PartialSequence], conf)
-
-    var sortedbinSizeEstimate:Array[(Int,Int)] = null
-    var partitioner:MultiprocessorSchedulingPartitioner = null
-
-    if(configuration.useCustomPartitioner){
-      sortedbinSizeEstimate = sequencesRDD.sample(withReplacement=false,fraction=0.1).mapPartitions(getBinsEstimateSizes(broadcastK.value, broadcastM.value, broadcastB.value, broadcastC.value)).reduceByKey(_+_).sortBy(_._2, ascending = false).collect()
-      partitioner = new MultiprocessorSchedulingPartitioner(configuration.numPartitionTasks,sortedbinSizeEstimate)
+        val superKmers = sequencesRDD.mapPartitions(getSuperKmers(broadcastK.value, broadcastM.value, broadcastC.value))
+        superKmers.aggregateByKey(new ArrayBuffer[(String,ArrayBuffer[Kmer])])((accum,el)=> accum += el,_ ++ _).mapPartitions(extractKXmersHTAndComputePartialDistances(broadcastK.value, broadcastPath.value,write = configuration.write,distanceMeasure = configuration.distanceMeasure))
     }
 
-    val superKmers = sequencesRDD.mapPartitions(getSuperKmers(broadcastK.value, broadcastM.value, broadcastB.value, broadcastC.value))
-    if(configuration.useCustomPartitioner)
-      superKmers.aggregateByKey(new ArrayBuffer[(String,ArrayBuffer[Kmer])],partitioner)((accum,el)=> accum += el,_ ++ _).mapPartitions(extractKXmersAndComputePartialDistances(broadcastK.value, broadcastX.value, broadcastPath.value,write = configuration.write,distanceMeasure = configuration.distanceMeasure)) //mapPartitions(extractKXmers(broadcastK.value, broadcastX.value)) //.mapPartitions(_.toList.sortBy(r => (r._2,r._1)).takeRight(broadcastN.value).toIterator)
-    else superKmers.aggregateByKey(new ArrayBuffer[(String,ArrayBuffer[Kmer])])((accum,el)=> accum += el,_ ++ _).mapPartitions(extractKXmersAndComputePartialDistances(broadcastK.value, broadcastX.value, broadcastPath.value,write = configuration.write,distanceMeasure = configuration.distanceMeasure))
 
 
-
-
-    }
   }
