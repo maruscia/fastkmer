@@ -19,11 +19,10 @@ object TestMultisequenceKmerCounter {
 
 
     //defaults if unspecified
-    var k = 20
-    var m:Int = 4
-    var x = 3
-    var b = 2048
+    var k = 28
+    var m:Int = 7
 
+    var b = 0 //using signatures
     var inputDatasetPath =  ""
     var outputDatasetPath = ""
     var prefix = ""
@@ -37,17 +36,20 @@ object TestMultisequenceKmerCounter {
 
     k = args(0).toInt
     m = args(1).toInt
-    x = args(2).toInt
-    useHT =  if(args(3).toInt == 1) true else false
-    sequenceType = args(4).toInt
-    inputDatasetPath = args(5)
-    outputDatasetPath = args(6)
-    prefix = args(7)
-    write = if(args(8).toInt == 1) true else false
-    useKryo = if(args(9).toInt == 1) true else false
-    useCustomPartitioner = if(args(10).toInt == 1) true else false
-    if(useCustomPartitioner)
-      numPartitionTasks = args(11).toInt
+
+    useHT =  true//if(args(2).toInt == 1) true else false
+    sequenceType = args(2).toInt
+    inputDatasetPath = args(3)
+    outputDatasetPath = args(4)
+    prefix = args(5)
+    write = if(args(6).toInt == 1) true else false
+
+    //Next parameters are set to default values, you won't need to take care of custom partitioners and serializer
+    useKryo = false//if(args(8).toInt == 1) true else false
+    useCustomPartitioner = false//if(args(9).toInt == 1) true else false
+
+    //if(useCustomPartitioner)
+    //  numPartitionTasks = args(10).toInt
 
     /*val it = args.iterator
     while(it.hasNext) {
@@ -92,19 +94,15 @@ object TestMultisequenceKmerCounter {
 */
 
     //Default distance measure: SquaredEuclidean
-
-    val tc = MultisequenceTestConfiguration(inputDatasetPath,outputDatasetPath,k,m,sequenceType=sequenceType,write=write,useCustomPartitioner=useCustomPartitioner,numPartitionTasks=numPartitionTasks)
+    val tc = MultisequenceTestConfiguration(inputDatasetPath,outputDatasetPath,prefix,k,m,sequenceType=sequenceType,write=write,useCustomPartitioner=useCustomPartitioner,numPartitionTasks=numPartitionTasks)
     run(tc)
-
   }
-
 
   def run(configuration: MultisequenceTestConfiguration) {
 
     var conf = new SparkConf()
       .setAppName("SKC Test: k" + configuration.k + " m:" + configuration.m)
       .setMaster("local[4]")
-
 
     val spark = SparkSession
       .builder

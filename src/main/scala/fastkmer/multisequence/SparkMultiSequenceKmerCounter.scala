@@ -14,7 +14,7 @@ import com.esotericsoftware.kryo.io.Output
 import fastdoop.{FASTAlongInputFileFormat, FASTAshortInputFileFormat, PartialSequence, Record}
 import distances._
 import fastkmer.MultiprocessorSchedulingPartitioner
-import fastkmer.multisequence.multisequtil.{MultisequenceTestConfiguration, SequencePair}
+import fastkmer.multisequence.multisequtil._
 import fastkmer.util._
 import it.unimi.dsi.fastutil.objects.Object2IntOpenHashMap
 import org.apache.hadoop.conf.Configuration
@@ -27,8 +27,10 @@ import scala.collection.mutable
 import scala.collection.mutable.ArrayBuffer
 object SparkMultiSequenceKmerCounter {
 
+  //first phase
   def getSuperKmers(k: Int, m: Int, bothStrands: Boolean)(reads: Iterator[(NullWritable, _)]):  Iterator[(Int, (String,ArrayBuffer[Kmer]))] = {
     //debug: start datetime
+    println("First phase, kmer extraction")
     val start = new Date(System.currentTimeMillis())
     var t0 = System.nanoTime()/1000000
 
@@ -51,7 +53,9 @@ object SparkMultiSequenceKmerCounter {
     var i = 0
     var new_kmer:Kmer = null
 
-    //sequence name
+    // Code handling sequence name,
+    // #FIXME: here we consider that each file holds a sequence.
+    // Must be adjusted with your scheme
     var sequence: String = null
 
 
@@ -185,135 +189,6 @@ object SparkMultiSequenceKmerCounter {
     out.view.map{ case (x,y)=> (x,(sequence,y))}.iterator
   }
 
-
-  def getBinsEstimateSizes(k: Int, m: Int, B: Int, bothStrands: Boolean)(reads: Iterator[(NullWritable, _)]): Iterator[(Int, Int)] = {
-      //debug: start datetime
-      val start = new Date(System.currentTimeMillis())
-      var t0 = System.nanoTime()/1000000
-
-      def bin(s: Int) = hash_to_bucket(s, B)
-      var nreads = 0
-
-      var out = Array.tabulate[(Int, ArrayBuffer[Kmer])](B)(i => (i,  new ArrayBuffer[Kmer]))
-
-      var t1 = t0
-      var total:Long = 0
-
-      val norm:Array[Int] = fillNorm(m)
-
-      var lastMmask :Long = (1 << m * 2) - 1
-      //keeps upper bound on distinct kmers that could be in a bin (for use with extractSuperKmersHT)
-      val binSizes = new Array[Int](B)
-
-      while (reads.hasNext) {
-
-        val read = reads.next._2
-
-        //println(read)
-
-        val cur: Array[Byte] = read match {
-          case read: PartialSequence => read.getValue.replaceAll("\n", "").getBytes()
-          case read: Record => read.getValue.replaceAll("\n", "").getBytes()
-        }
-
-        if (cur.length >= k) {
-          //initialize vars
-          var min_s:Signature = Signature(-1,-1)
-          var super_kmer_start = 0
-          var s: Kmer = null
-          var N_pos = (-1, -1)
-          var i = 0
-          var bin_no = -1
-          while (i < cur.length - k + 1) {
-
-
-
-            N_pos = firstAndLastOccurrenceOfInvalidNucleotide('N',cur,i,i + k) //DEBUG: not much influence
-
-
-            if (N_pos._1 != -1) {
-              //there's at least one 'N'
-
-              if (super_kmer_start < i) {
-                // must output a superkmer
-
-                binSizes(bin(min_s.value)) += i - super_kmer_start
-
-
-              }
-              super_kmer_start = i + N_pos._2 + 1 //after last index of N
-              i += N_pos._2 + 1
-            }
-            else {//we have a valid kmer
-              s = new Kmer(k,cur,i)
-
-
-              if (i > min_s.pos) {
-                if (super_kmer_start < i) {
-
-                  binSizes(bin(min_s.value))+= i - super_kmer_start
-
-                  super_kmer_start = i
-
-
-                }
-
-                min_s.set(s.getSignature(m,norm),i)
-
-
-              }
-              else {
-
-                val last:Int = s.lastM(lastMmask,norm,m)
-
-                if (last < min_s.value) {
-
-                  //add superkmer
-                  if (super_kmer_start < i) {
-                    binSizes(bin(min_s.value))+= i - super_kmer_start
-
-                    super_kmer_start = i
-
-                  }
-
-                  min_s.set((last,i + k - m))
-
-                }
-              }
-
-              i += 1
-            }
-          }
-
-          if (cur.length - super_kmer_start >= k) {
-
-
-            N_pos = firstAndLastOccurrenceOfInvalidNucleotide('N',cur,i,cur.length)
-
-            if(N_pos._1 == -1){
-              binSizes(bin(min_s.value))+=cur.length - super_kmer_start -k +1
-
-            }
-            else if(i + N_pos._1 >= super_kmer_start+k){
-              binSizes(bin(min_s.value))+= i + N_pos._1 - k + 1
-
-            }
-          }
-
-        }
-        nreads += 1
-      }
-
-      val end = new Date(System.currentTimeMillis())
-
-
-      //filter empty bins, return iterator
-      //out.iterator.foreach(println)
-
-      println("Finished sample(). Total time: "+ getDateDiff(start,end,TimeUnit.SECONDS) +"s")
-
-      binSizes.zipWithIndex.filter(_._1 >0).map(_.swap).toIterator
-    }
 
 /*deprecated: for previous FastKmer implementation
     def extractKXmersAndComputePartialDistances(k: Int, x: Int, path: String, write:Boolean=true, distanceMeasure: DistanceMeasure)(bins: Iterator[(Int, ArrayBuffer[(String,ArrayBuffer[Kmer])])]): Iterator[(SequencePair,Double)] = {
@@ -565,11 +440,12 @@ object SparkMultiSequenceKmerCounter {
       sequenceSimilarities.toIterator
     }
 */
-  //Second phase kmer writing implementation (ignore the fields outputPartition (for use with custom partitioner) and Kryo (custom serializer)
-  def extractKXmersHTAndComputePartialDistances(k: Int, path: String,write:Boolean=true,useKryo:Boolean=false,outputPartition:Boolean=false,distanceMeasure: DistanceMeasure)(bins: Iterator[(Int, ArrayBuffer[(String,ArrayBuffer[Kmer])])]): Iterator[(SequencePair,Double)] = {
 
-    val start = new Date(System.currentTimeMillis())
-    println("[" + start + "] Started extractKXmersHTAndComputePartialDistances() with path " + path + "writing: " + write)
+  //Second phase kmer writing implementation (ignore the fields outputPartition (for use with custom partitioner) and Kryo (custom serializer)
+  def extractKXmersHTAndComputePartialDistances(k: Int, path: String,write:Boolean=true,useKryo:Boolean=false,outputPartition:Boolean=false,distanceMeasure: DistanceMeasure)(bins: Iterator[(Int, ArrayBuffer[(String,ArrayBuffer[Kmer])])]): Iterator[((String,String),Double)] = {
+
+
+    println("[Second phase extracting kmers and computing partial distances with output path " + path + ", writing: " + write)
 
     var nBins: Int = 0
     var binNumber = -1
@@ -583,22 +459,17 @@ object SparkMultiSequenceKmerCounter {
 
     var map: Object2IntOpenHashMap[Kmer] = null
 
-
     var kmer: Kmer = null
 
-
-    //output
     var outputPath: String = null
     var outputStream: FSDataOutputStream = null
     var writer: BufferedWriter = null
     var output: Output = null
     var kryo: Kryo = null
 
-    //Sequences related variables
-    val sequenceSimilarities = new mutable.HashMap[SequencePair, Double]() //holding partial similarity values for each pair of seqs
-
-    var sequenceNames = Seq[String]() // holding the
-
+    //Sequences related variables (you can change them, this is just a stub implementation)
+    val sequenceSimilarities = new mutable.HashMap[(String,String), Double]() //holding partial similarity values for each pair of seqs (note we assume to have at least two seqs, but we should check it.)
+    var sequenceNames = Seq[String]() // holding the sequence identifier
 
     if (write && outputPartition) {
       print("Processing partition: " + TaskContext.getPartitionId())
@@ -609,31 +480,38 @@ object SparkMultiSequenceKmerCounter {
       kryo = new Kryo()
     }
 
-    while (bins.hasNext) {
-      // for each bin
+    map = new Object2IntOpenHashMap[Kmer](kmersUpperBoundForBin)
 
-      val binStart = new Date(System.currentTimeMillis())
-      val sequencesInBin = bins.next() //Int, ArrayBuffer[(String,ArrayBuffer[Kmer])]
+    while (bins.hasNext) { // for each bin
+
+      val sequencesInBin = bins.next() //Will be of this kind: Int, ArrayBuffer[(String,ArrayBuffer[Kmer])]
 
       binNumber = sequencesInBin._1
       println("\n[" + nBins + "] Examining bin: " + binNumber)
+      println(sequencesInBin)
+      println(map)
+
 
 
       for ((sequenceName, sequenceArr) <- sequencesInBin._2) {
-        val seqId: Short = if (!sequenceNames.contains(sequenceName)) {
-          sequenceNames = sequenceNames :+ sequenceName
 
-          (sequenceNames.length - 1).toShort
-        }
-        else sequenceNames.indexOf(sequenceName).toShort
+        /*
+        //this is just a mapping to map sequences names to unique ids, you might not even need it
+       val seqId: Short = if (!sequenceNames.contains(sequenceName)) {
+         sequenceNames = sequenceNames :+ sequenceName
 
+         (sequenceNames.length - 1).toShort
+       }
+       else sequenceNames.indexOf(sequenceName).toShort
 
-        sequenceBin = sequenceArr.toIterator
+     */
+        sequenceBin = sequenceArr.toIterator //iterate the array of sequences
 
         while (sequenceBin.hasNext) {
           //for each super-kmer
 
           sk = sequenceBin.next
+          //println("Superkmer: "+sk)
 
           for (i <- 0 to sk.length - k) {
 
@@ -641,11 +519,10 @@ object SparkMultiSequenceKmerCounter {
             kmer = new Kmer(k, sk, i, i + k - 1, orientation)
 
             map.addTo(kmer, 1)
-
+            println(kmer + " +1")
             //Here you should use a map-like datastructure that takes into account separately, the counts for each sequence
             //e.g.,:
             //Key: Kmer   Value Seq[(seq1,count1),(seq2,count2),...)]
-
 
           }
         }
@@ -655,57 +532,59 @@ object SparkMultiSequenceKmerCounter {
       //Initialize sequence similarities: depending on how you handle sequences, you might use something similar
       if (sequenceSimilarities.isEmpty)
         for (s1 <- sequenceNames.indices)
-          for (s2 <- s1 + 1 to sequenceNames.length)
-            sequenceSimilarities.put(SequencePair()(sequenceNames(s1), sequenceNames(s2)), distanceMeasure.initDistance())
-
-      if (map.size() > 0) {
-
-
-        if (!outputPartition && write) {
-          outputPath = path + "/bin" + binNumber
-          if (useKryo) {
-            kryo = new Kryo()
-            output = new Output(FileSystem.get(URI.create(outputPath), new Configuration()).create(new Path(outputPath)))
+          for (s2 <- s1 + 1 until sequenceNames.length) {
+            sequenceSimilarities.put(sequenceFactory(sequenceNames(s1), sequenceNames(s2)), distanceMeasure.initDistance())
           }
-          else
-            writer = new BufferedWriter(new OutputStreamWriter(FileSystem.get(URI.create(outputPath), new Configuration()).create(new Path(outputPath))))
+    }
+
+    println(map)
+    if (map.size() > 0) {
+//here we get counts and write them to disk
+
+      if (!outputPartition && write) {
+
+        outputPath = path + "/bin" + binNumber
+        if (useKryo) {
+          kryo = new Kryo()
+          output = new Output(FileSystem.get(URI.create(outputPath), new Configuration()).create(new Path(outputPath)))
         }
-
-        val it = map.object2IntEntrySet().fastIterator()
-
-        while (it.hasNext) {
-          val km = it.next()
-
-          // 1. Here you should update the sequence similarities with this kmer
-          for (s1 <- sequenceNames.indices)
-            for (s2 <- s1 + 1 to sequenceNames.length) {
-              val pair = SequencePair()(sequenceNames(s1), sequenceNames(s2))
-              sequenceSimilarities.put(pair, distanceMeasure.distanceOperator(
-                sequenceSimilarities.get(pair).asInstanceOf[Double],
-                distanceMeasure.computePartialDistance(new Parameters(//counts(sequence1),counts(sequence2) <- you should get them from your map
-                )))
-              )
-
-            }
-
-          if (write)
-            if (useKryo) kryo.writeObject(output, km.getKey + "\t" + "\t" + km.getIntValue + '\n')
-            else writer.write(km.getKey + "\t" + km.getIntValue + '\n')
-        }
-
-        if (write && !outputPartition) {
-          if (useKryo) output.close()
-          else writer.close()
-        }
+        else
+          writer = new BufferedWriter(new OutputStreamWriter(FileSystem.get(URI.create(outputPath), new Configuration()).create(new Path(outputPath))))
       }
 
+      val it = map.object2IntEntrySet().fastIterator()//you will have your  map, see also next comments
 
+      while (it.hasNext) {
+        val km = it.next()
+
+        /* 1. Here you should update the sequence similarities with the counts relative to this kmer, something along the lines of..
+        for (s1 <- sequenceNames.indices)
+          for (s2 <- s1 + 1 to sequenceNames.length) {
+            sequenceSimilarities.put(pair, distanceMeasure.distanceOperator(
+              sequenceSimilarities.get(pair).asInstanceOf[Double],
+              distanceMeasure.computePartialDistance(new Parameters(1,1)//counts(sequence1),counts(sequence2) <- you should get them from your map
+              ))
+            )
+
+          }
+          */
+
+        if (write)
+          if (useKryo) kryo.writeObject(output, km.getKey + "\t" + "\t" + km.getIntValue + '\n')
+          else writer.write(km.getKey + "\t" + km.getIntValue + '\n')
+      }
+
+      if (write && !outputPartition) {
+        if (useKryo) output.close()
+        else writer.close()
+      }
     }
 
-    if(outputPartition && write){
-      if(useKryo) output.close()
-      else writer.close()
-    }
+
+  if(outputPartition && write){
+    if(useKryo) output.close()
+    else writer.close()
+  }
 
     //you should probably output to next phase for aggregation
     sequenceSimilarities.iterator
@@ -738,8 +617,12 @@ object SparkMultiSequenceKmerCounter {
         else sc.newAPIHadoopFile(FASTfile, classOf[FASTAlongInputFileFormat], classOf[NullWritable], classOf[PartialSequence], conf)
 
         val superKmers = sequencesRDD.mapPartitions(getSuperKmers(broadcastK.value, broadcastM.value, broadcastC.value))
-        superKmers.aggregateByKey(new ArrayBuffer[(String,ArrayBuffer[Kmer])])((accum,el)=> accum += el,_ ++ _).mapPartitions(extractKXmersHTAndComputePartialDistances(broadcastK.value, broadcastPath.value,write = configuration.write,distanceMeasure = configuration.distanceMeasure))
-    }
+    //here we are using mappartition (as opposed to forEachPartition in SparkBinKmerCounter, because we need to then aggregate our rdd to get final distances..
+        val partialDistances = superKmers.aggregateByKey(new ArrayBuffer[(String,ArrayBuffer[Kmer])])((accum,el)=> accum += el,_ ++ _).mapPartitions(extractKXmersHTAndComputePartialDistances(broadcastK.value, broadcastPath.value,write = configuration.write,distanceMeasure = configuration.distanceMeasure))
+
+    //here you have to do another step here to aggregate distances , currently we put only a count to have an action that triggers the whole computation
+      println(partialDistances.count())
+  }
 
 
 

@@ -22,11 +22,10 @@ package object multisequtil {
 
   }*/
 
-  case class MultisequenceTestConfiguration(dataset: String,outputDirectory:String,k: Int, m: Int,
+  case class MultisequenceTestConfiguration(dataset: String,outputDirectory:String, prefix: String, k: Int, m: Int,
                                sequenceType:Int=0,canonical:Boolean=true,debug:Boolean=false,write:Boolean=true,useCustomPartitioner:Boolean=false,numPartitionTasks:Int=0,var distanceMeasure:DistanceMeasure = new SquaredEuclidean()){
 
-
-    val outputDir: String  = outputDirectory + "k" + k + "_m" + m  +"_s"+sequenceType
+    val outputDir: String  = outputDirectory + prefix + "k" + k + "_m" + m  +"_s"+sequenceType
     var  testDesc = "Multisequence Kmer counting on Spark. \nTest parameters:\nDataset: "+dataset + "\nk: "+ k + "\nm: " + m  +"\nSequence type: "+sequenceType +"\nWriting: "+write+"\nBin Packing Partitioning: "+useCustomPartitioner
     if(useCustomPartitioner)
       testDesc+= "\t no. partition tasks: "+numPartitionTasks
@@ -34,14 +33,9 @@ package object multisequtil {
     override def toString: String = testDesc
   }
 
-  case class SequencePair(sorted:Boolean = true)(seq1:String,seq2:String) extends Serializable {
-    val(s1,s2) = if(!sorted || (seq1 <= seq2)) (seq1,seq2) else (seq2,seq1)
-
-    override def equals(that:Any) = that match {
-      case that: SequencePair => (this.s1 compare that.s1) == 0 && (this.s2 compare that.s2) == 0
-      case _ => false
-    }
-
+  def sequenceFactory(seq1:String,seq2:String,sorted:Boolean = true)= {
+    if(!sorted || (seq1 <= seq2)) (seq1,seq2) else (seq2,seq1)
   }
+
 
 }
