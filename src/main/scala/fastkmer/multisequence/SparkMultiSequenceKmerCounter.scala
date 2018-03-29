@@ -186,7 +186,7 @@ object SparkMultiSequenceKmerCounter {
 
     println("Finished getSuperKmersSignatures. Total time: "+ getDateDiff(start,end,TimeUnit.SECONDS) +"s")
 
-    out.view.map{ case (x,y)=> (x,(sequence,y))}.iterator
+    out.view.map{ case (x,y)=> (x,(sequence,y))}.iterator // outputs an Iterator[(Int, (String,ArrayBuffer[Kmer]))]
   }
 
 
